@@ -7,10 +7,10 @@
 //! # Example
 //!
 //! ```no_run
-//! use acme_lib::{Error, Directory, DirectoryUrl};
-//! use acme_lib::create_p384_key;
+//! use acme_micro::{Error, Certificate, Directory, DirectoryUrl};
+//! use acme_micro::create_p384_key;
 //!
-//! fn request_cert() -> Result<(), Error> {
+//! fn request_cert() -> Result<Certificate, Error> {
 //!
 //! // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
 //! let url = DirectoryUrl::LetsEncrypt;
@@ -18,10 +18,16 @@
 //! // Create a directory entrypoint.
 //! let dir = Directory::from_url(url)?;
 //!
-//! // Reads the private account key from persistence, or
-//! // creates a new one before accessing the API to establish
-//! // that it's there.
-//! let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
+//! // Your contact addresses, note the `mailto:`
+//! let contact = vec!["mailto:foo@bar.com".to_string()];
+//!
+//! // Generate a private key and register an account with your ACME provider.
+//! // You should write it to disk any use `load_account` afterwards.
+//! let acc = dir.register_account(contact.clone())?;
+//!
+//! // Example of how to load an account from string:
+//! let privkey = acc.acme_private_key_pem();
+//! let acc = dir.load_account(&privkey, contact)?;
 //!
 //! // Order a new TLS certificate for a domain.
 //! let mut ord_new = acc.new_order("mydomain.io", &[])?;
@@ -93,7 +99,7 @@
 //! let cert = ord_cert.download_cert()?;
 //! println!("{:?}", cert);
 //!
-//! Ok(())
+//! Ok(cert)
 //! }
 //! ```
 //!

@@ -98,11 +98,6 @@ impl Account {
     }
 
     /// Revoke a certificate for the reason given.
-    ///
-    /// This calls the ACME API revoke endpoint, but does not affect the locally persisted
-    /// certs, the revoked certificate will still be available using [`certificate`].
-    ///
-    /// [`certificate`]: struct.Account.html#method.certificate
     pub fn revoke_certificate(&self, cert: &Certificate, reason: RevocationReason) -> Result<()> {
         // convert to base64url of the DER (which is not PEM).
         let certificate = base64url(&cert.certificate_der());

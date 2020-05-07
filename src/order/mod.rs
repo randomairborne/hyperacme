@@ -282,11 +282,6 @@ pub struct CertOrder {
 
 impl CertOrder {
     /// Request download of the issued certificate.
-    ///
-    /// When downloaded, the certificate and key will be saved in the
-    /// persistence. They can later be retreived using [`Account::certificate`].
-    ///
-    /// [`Account::certificate`]: ../struct.Account.html#method.certificate
     pub fn download_cert(self) -> Result<Certificate> {
         //
         let url = self.order.api_order.certificate.expect("certificate url");

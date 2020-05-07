@@ -1,15 +1,16 @@
-# acme-lib
+# acme-micro
 
-acme-lib is a library for accessing ACME (Automatic Certificate Management Environment)
-services such as [Let's Encrypt](https://letsencrypt.org/).
+acme-micro is a fork of [acme-lib](https://github.com/algesten/acme-lib) and
+allows accessing ACME (Automatic Certificate Management Environment) services
+such as [Let's Encrypt](https://letsencrypt.org/).
 
 Uses ACME v2 to issue/renew certificates.
 
 ## Example
 
 ```rust
-use acme_lib::{Error, Certificate, Directory, DirectoryUrl};
-use acme_lib::create_p384_key;
+use acme_micro::{Error, Certificate, Directory, DirectoryUrl};
+use acme_micro::create_p384_key;
 
 fn request_cert() -> Result<Certificate, Error> {
 
@@ -22,15 +23,12 @@ let dir = Directory::from_url(url)?;
 // Your contact addresses, note the `mailto:`
 let contact = vec!["mailto:foo@bar.com".to_string()];
 
-// Reads the private account key from persistence, or
-// creates a new one before accessing the API to establish
-// that it's there.
+// Generate a private key and register an account with your ACME provider.
+// You should write it to disk any use `load_account` afterwards.
 let acc = dir.register_account(contact.clone())?;
 
-// You should only call `register_account` once, store the private (eg. in a
-// file) and use `load_account] afterwards.
+// Example of how to load an account from string:
 let privkey = acc.acme_private_key_pem();
-// XXX: write privatekey to disk, afterwards you can load it like this:
 let acc = dir.load_account(&privkey, contact)?;
 
 // Order a new TLS certificate for a domain.
@@ -98,9 +96,9 @@ let pkey_pri = create_p384_key();
 let ord_cert =
     ord_csr.finalize_pkey(pkey_pri, 5000)?;
 
-// Now download the certificate. Also stores the cert in
-// the persistence.
+// Finally download the certificate.
 let cert = ord_cert.download_cert()?;
+println!("{:?}", cert);
 
 Ok(cert)
 }
