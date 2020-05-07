@@ -65,13 +65,12 @@ impl Auth {
     /// The challenge will be accessed over HTTP (not HTTPS), for obvious reasons.
     ///
     /// ```no_run
-    /// use acme_lib::persist::Persist;
     /// use acme_lib::order::Auth;
     /// use acme_lib::Error;
     /// use std::fs::File;
     /// use std::io::Write;
     ///
-    /// fn web_authorize<P: Persist>(auth: &Auth<P>) -> Result<(), Error> {
+    /// fn web_authorize(auth: &Auth) -> Result<(), Error> {
     ///   let challenge = auth.http_challenge();
     ///   // Assuming our web server's root is under /var/www
     ///   let path = {
@@ -102,11 +101,10 @@ impl Auth {
     /// The <proof> contains the signed token proving this account update it.
     ///
     /// ```no_run
-    /// use acme_lib::persist::Persist;
     /// use acme_lib::order::Auth;
     /// use acme_lib::Error;
     ///
-    /// fn dns_authorize<P: Persist>(auth: &Auth<P>) -> Result<(), Error> {
+    /// fn dns_authorize(auth: &Auth) -> Result<(), Error> {
     ///   let challenge = auth.dns_challenge();
     ///   let record = format!("_acme-challenge.{}.", auth.domain_name());
     ///   // route_53_set_record(&record, "TXT", challenge.dns_proof());
@@ -290,16 +288,16 @@ fn wait_for_auth_status(
 
 #[cfg(test)]
 mod test {
-    use crate::persist::*;
     use crate::*;
 
     #[test]
     fn test_get_challenges() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let acc = dir.account("foo@bar.com")?;
+        let dir = Directory::from_url(url)?;
+        let acc = dir.register_account(vec![
+            "mailto:foo@bar.com".to_string(),
+        ])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
         let authz = ord.authorizations()?;
         assert!(authz.len() == 1);

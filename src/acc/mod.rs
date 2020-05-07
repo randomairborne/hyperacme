@@ -143,16 +143,16 @@ pub enum RevocationReason {
 
 #[cfg(test)]
 mod test {
-    use crate::persist::*;
     use crate::*;
 
     #[test]
     fn test_create_order() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let acc = dir.account("foo@bar.com")?;
+        let dir = Directory::from_url(url)?;
+        let acc = dir.register_account(vec![
+            "mailto:foo@bar.com".to_string(),
+        ])?;
         let _ = acc.new_order("acmetest.example.com", &[])?;
         Ok(())
     }

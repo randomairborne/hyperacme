@@ -312,16 +312,16 @@ impl CertOrder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::persist::*;
     use crate::*;
 
     #[test]
     fn test_get_authorizations() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let acc = dir.account("foo@bar.com")?;
+        let dir = Directory::from_url(url)?;
+        let acc = dir.register_account(vec![
+            "mailto:foo@bar.com".to_string(),
+        ])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
         let _ = ord.authorizations()?;
         Ok(())
@@ -331,9 +331,10 @@ mod test {
     fn test_finalize() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let acc = dir.account("foo@bar.com")?;
+        let dir = Directory::from_url(url)?;
+        let acc = dir.register_account(vec![
+            "mailto:foo@bar.com".to_string(),
+        ])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
@@ -346,9 +347,10 @@ mod test {
     fn test_download_and_save_cert() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let acc = dir.account("foo@bar.com")?;
+        let dir = Directory::from_url(url)?;
+        let acc = dir.register_account(vec![
+            "mailto:foo@bar.com".to_string(),
+        ])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
 
         // shortcut auth
@@ -356,14 +358,9 @@ mod test {
         let pkey = cert::create_p256_key();
         let ord = ord.finalize_pkey(pkey, 1)?;
 
-        let cert = ord.download_and_save_cert()?;
+        let cert = ord.download_cert()?;
         assert_eq!("CERT HERE", cert.certificate());
         assert!(!cert.private_key().is_empty());
-
-        // check that the keys have been persisted
-        let cert2 = acc.certificate("acmetest.example.com")?.unwrap();
-        assert_eq!(cert.private_key(), cert2.private_key());
-        assert_eq!(cert.certificate(), cert2.certificate());
         assert_eq!(cert.valid_days_left(), 89);
 
         Ok(())

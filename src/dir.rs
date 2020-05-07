@@ -100,13 +100,12 @@ impl Directory {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::persist::*;
+
     #[test]
     fn test_create_directory() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let _ = Directory::from_url(persist, url)?;
+        let _ = Directory::from_url(url)?;
         Ok(())
     }
 
@@ -114,23 +113,10 @@ mod test {
     fn test_create_acount() -> Result<()> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let _ = dir.account("foo@bar.com")?;
-        Ok(())
-    }
-
-    #[test]
-    fn test_persisted_acount() -> Result<()> {
-        let server = crate::test::with_directory_server();
-        let url = DirectoryUrl::Other(&server.dir_url);
-        let persist = MemoryPersist::new();
-        let dir = Directory::from_url(persist, url)?;
-        let acc1 = dir.account("foo@bar.com")?;
-        let acc2 = dir.account("foo@bar.com")?;
-        let acc3 = dir.account("karlfoo@bar.com")?;
-        assert_eq!(acc1.acme_private_key_pem(), acc2.acme_private_key_pem());
-        assert!(acc1.acme_private_key_pem() != acc3.acme_private_key_pem());
+        let dir = Directory::from_url(url)?;
+        let _ = dir.register_account(vec![
+            "mailto:foo@bar.com".to_string(),
+        ])?;
         Ok(())
     }
 

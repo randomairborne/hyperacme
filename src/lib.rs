@@ -8,7 +8,6 @@
 //!
 //! ```no_run
 //! use acme_lib::{Error, Directory, DirectoryUrl};
-//! use acme_lib::persist::FilePersist;
 //! use acme_lib::create_p384_key;
 //!
 //! fn request_cert() -> Result<(), Error> {
@@ -16,16 +15,13 @@
 //! // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
 //! let url = DirectoryUrl::LetsEncrypt;
 //!
-//! // Save/load keys and certificates to current dir.
-//! let persist = FilePersist::new(".");
-//!
 //! // Create a directory entrypoint.
-//! let dir = Directory::from_url(persist, url)?;
+//! let dir = Directory::from_url(url)?;
 //!
 //! // Reads the private account key from persistence, or
 //! // creates a new one before accessing the API to establish
 //! // that it's there.
-//! let acc = dir.account("foo@bar.com")?;
+//! let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
 //!
 //! // Order a new TLS certificate for a domain.
 //! let mut ord_new = acc.new_order("mydomain.io", &[])?;
@@ -94,7 +90,8 @@
 //!
 //! // Now download the certificate. Also stores the cert in
 //! // the persistence.
-//! let cert = ord_cert.download_and_save_cert()?;
+//! let cert = ord_cert.download_cert()?;
+//! println!("{:?}", cert);
 //!
 //! Ok(())
 //! }
