@@ -1,10 +1,10 @@
 [package]
 name = "acme-micro"
-description = "Library for requesting certificates from an ACME provider."
+description = "Library for requesting certificates from an ACME provider (acme-lib fork)."
 license = "MIT"
 repository = "https://github.com/kpcyrd/acme-micro"
 readme = "README.md"
-version = "0.7.1"
+version = "0.8.0"
 authors = [
     "Martin Algesten <martin@algesten.se>",
     "kpcyrd <git@rxv.cc>",
