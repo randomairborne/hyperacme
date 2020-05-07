@@ -3,10 +3,11 @@ use std::sync::Arc;
 
 use crate::acc::AcmeKey;
 use crate::api::{ApiAccount, ApiDirectory};
+use crate::error::*;
 use crate::req::{req_expect_header, req_get, req_handle_error};
 use crate::trans::{NoncePool, Transport};
 use crate::util::read_json;
-use crate::{Account, Result};
+use crate::Account;
 
 const LETSENCRYPT: &str = "https://acme-v02.api.letsencrypt.org/directory";
 const LETSENCRYPT_STAGING: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";

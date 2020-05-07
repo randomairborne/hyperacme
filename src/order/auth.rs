@@ -7,9 +7,9 @@ use std::time::Duration;
 use crate::acc::AccountInner;
 use crate::acc::AcmeKey;
 use crate::api::{ApiAuth, ApiChallenge, ApiEmptyObject, ApiEmptyString};
+use crate::error::*;
 use crate::jwt::*;
 use crate::util::{base64url, read_json};
-use crate::Result;
 
 /// An authorization ([ownership proof]) for a domain name.
 ///
@@ -245,7 +245,7 @@ impl<A> Challenge<A> {
             } else {
                 "Validation failed and no error found".into()
             };
-            return Err(reason.into());
+            bail!("Validation failed: {:?}", reason);
         }
 
         Ok(())

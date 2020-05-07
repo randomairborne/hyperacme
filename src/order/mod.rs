@@ -25,8 +25,8 @@ use std::time::Duration;
 use crate::acc::AccountInner;
 use crate::api::{ApiAuth, ApiEmptyString, ApiFinalize, ApiOrder};
 use crate::cert::{create_csr, Certificate};
+use crate::error::*;
 use crate::util::{base64url, read_json};
-use crate::Result;
 
 mod auth;
 
@@ -206,7 +206,7 @@ impl CsrOrder {
     /// [`finalize_pkey`]: struct.CsrOrder.html#method.finalize_pkey
     pub fn finalize(self, private_key_pem: &str, delay_millis: u64) -> Result<CertOrder> {
         let pkey_pri = PKey::private_key_from_pem(private_key_pem.as_bytes())
-            .map_err(|e| format!("Error reading private key PEM: {}", e))?;
+            .context("Error reading private key PEM")?;
         self.finalize_pkey(pkey_pri, delay_millis)
     }
 
@@ -248,7 +248,7 @@ impl CsrOrder {
         let order = wait_for_order_status(&inner, &order_url, delay_millis)?;
 
         if !order.api_order.is_status_valid() {
-            return Err(format!("Order is in status: {:?}", order.api_order.status).into());
+            bail!("Order is in status: {:?}", order.api_order.status);
         }
 
         Ok(CertOrder { private_key, order })

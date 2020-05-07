@@ -8,7 +8,7 @@ use openssl::stack::Stack;
 use openssl::x509::extension::SubjectAlternativeName;
 use openssl::x509::{X509Req, X509ReqBuilder, X509};
 
-use crate::Result;
+use crate::error::*;
 
 lazy_static! {
     pub(crate) static ref EC_GROUP_P256: EcGroup = { ec_group(Nid::X9_62_PRIME256V1) };
@@ -88,6 +88,18 @@ impl Certificate {
             private_key,
             certificate,
         }
+    }
+
+    pub fn parse(private_key: String, certificate: String) -> Result<Self> {
+        // validate certificate
+        X509::from_pem(certificate.as_bytes())?;
+        // validate private key
+        PKey::private_key_from_pem(private_key.as_bytes())?;
+
+        Ok(Certificate {
+            private_key,
+            certificate,
+        })
     }
 
     /// The PEM encoded private key.

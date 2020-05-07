@@ -2,7 +2,7 @@ use openssl::ec::EcKey;
 use openssl::pkey;
 
 use crate::cert::EC_GROUP_P256;
-use crate::Result;
+use crate::error::*;
 
 #[derive(Clone, Debug)]
 pub(crate) struct AcmeKey {
@@ -18,8 +18,8 @@ impl AcmeKey {
     }
 
     pub(crate) fn from_pem(pem: &[u8]) -> Result<AcmeKey> {
-        let pri_key =
-            EcKey::private_key_from_pem(pem).map_err(|e| format!("Failed to read PEM: {}", e))?;
+        let pri_key = EcKey::private_key_from_pem(pem)
+            .context("Failed to read PEM")?;
         Ok(Self::from_key(pri_key))
     }
 

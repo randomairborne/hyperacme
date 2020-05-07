@@ -5,10 +5,10 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::acc::AcmeKey;
+use crate::error::*;
 use crate::jwt::*;
 use crate::req::{req_expect_header, req_handle_error, req_head, req_post};
 use crate::util::base64url;
-use crate::Result;
 
 /// JWS payload and nonce handling for requests to the API.
 ///

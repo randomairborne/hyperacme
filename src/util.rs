@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
 
+use crate::error::*;
 use crate::req::req_safe_read_body;
-use crate::Result;
 
 lazy_static! {
     static ref BASE64_CONFIG: base64::Config =
