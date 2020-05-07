@@ -163,7 +163,7 @@ mod util;
 
 pub mod api;
 pub mod order;
-pub mod persist;
+// pub mod persist;
 
 #[cfg(test)]
 mod test;

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::acc::AcmeKey;
 use crate::api::{ApiAccount, ApiDirectory};
-use crate::persist::{Persist, PersistKey, PersistKind};
 use crate::req::{req_expect_header, req_get, req_handle_error};
 use crate::trans::{NoncePool, Transport};
 use crate::util::read_json;
@@ -37,79 +36,35 @@ impl<'a> DirectoryUrl<'a> {
 
 /// Entry point for accessing an ACME API.
 #[derive(Clone)]
-pub struct Directory<P: Persist> {
-    persist: P,
+pub struct Directory {
     nonce_pool: Arc<NoncePool>,
     api_directory: ApiDirectory,
 }
 
-impl<P: Persist> Directory<P> {
+impl Directory {
     /// Create a directory over a persistence implementation and directory url.
-    pub fn from_url(persist: P, url: DirectoryUrl) -> Result<Directory<P>> {
+    pub fn from_url(url: DirectoryUrl) -> Result<Directory> {
         let dir_url = url.to_url();
         let res = req_handle_error(req_get(&dir_url))?;
         let api_directory: ApiDirectory = read_json(res)?;
         let nonce_pool = Arc::new(NoncePool::new(&api_directory.newNonce));
         Ok(Directory {
-            persist,
             nonce_pool,
             api_directory,
         })
     }
 
-    /// Access an account identified by a contact email.
-    ///
-    /// If a persisted private key exists for the contact email, it will be read
-    /// and used for further access. This way we reuse the same ACME API account.
-    ///
-    /// If one doesn't exist, it is created and the corresponding public key is
-    /// uploaded to the ACME API thus creating the account.
-    ///
-    /// Either way the `newAccount` API endpoint is called and thereby ensures the
-    /// account is active and working.
-    ///
-    /// This is the same as calling
-    /// `account_with_realm(contact_email, ["mailto: <contact_email>"]`)
-    pub fn account(&self, contact_email: &str) -> Result<Account<P>> {
-        // Contact email is the persistence realm when using this method.
-        let contact = vec![format!("mailto:{}", contact_email)];
-        self.account_with_realm(contact_email, contact)
+    pub fn register_account(&self, contact: Vec<String>) -> Result<Account> {
+        let acme_key = AcmeKey::new();
+        self.upsert_account(acme_key, contact)
     }
 
-    /// Access an account using a lower level method. The contact is optional
-    /// against the ACME API provider and there might be situations where you
-    /// either don't need it at all, or need it to be something else than
-    /// an email address.
-    ///
-    /// The `realm` parameter is a persistence realm, i.e. a namespace in the
-    /// persistence where all values belonging to this Account will be stored.
-    ///
-    /// If a persisted private key exists for the `realm`, it will be read
-    /// and used for further access. This way we reuse the same ACME API account.
-    ///
-    /// If one doesn't exist, it is created and the corresponding public key is
-    /// uploaded to the ACME API thus creating the account.
-    ///
-    /// Either way the `newAccount` API endpoint is called and thereby ensures the
-    /// account is active and working.
-    pub fn account_with_realm(&self, realm: &str, contact: Vec<String>) -> Result<Account<P>> {
-        // key in persistence for acme account private key
-        let pem_key = PersistKey::new(realm, PersistKind::AccountPrivateKey, "acme_account");
+    pub fn load_account(&self, pem: &str, contact: Vec<String>) -> Result<Account> {
+        let acme_key = AcmeKey::from_pem(pem.as_bytes())?;
+        self.upsert_account(acme_key, contact)
+    }
 
-        // Get the key from a saved PEM, or from creating a new
-        let mut is_new = false;
-        let pem = self.persist().get(&pem_key)?;
-        let acme_key = if let Some(pem) = pem {
-            // we got a persisted private key. read it.
-            debug!("Read persisted acme account key");
-            AcmeKey::from_pem(&pem)?
-        } else {
-            // create a new key (and new account)
-            debug!("Create new acme account key");
-            is_new = true;
-            AcmeKey::new()
-        };
-
+    fn upsert_account(&self, acme_key: AcmeKey, contact: Vec<String>) -> Result<Account> {
         // Prepare making a call to newAccount. This is fine to do both for
         // new keys and existing. For existing the spec says to return a 200
         // with the Location header set to the key id (kid).
@@ -128,18 +83,9 @@ impl<P: Persist> Directory<P> {
         // fill in the server returned key id
         transport.set_key_id(kid);
 
-        // If we did create a new key, save it back to the persistence.
-        if is_new {
-            debug!("Persist acme account key");
-            let pem = transport.acme_key().to_pem();
-            self.persist().put(&pem_key, &pem)?;
-        }
-
         // The finished account
         Ok(Account::new(
-            self.persist.clone(),
             transport,
-            realm,
             api_account,
             self.api_directory.clone(),
         ))
@@ -148,10 +94,6 @@ impl<P: Persist> Directory<P> {
     /// Access the underlying JSON object for debugging.
     pub fn api_directory(&self) -> &ApiDirectory {
         &self.api_directory
-    }
-
-    pub(crate) fn persist(&self) -> &P {
-        &self.persist
     }
 }
 

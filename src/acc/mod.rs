@@ -4,7 +4,6 @@ use std::sync::Arc;
 use crate::api::{ApiAccount, ApiDirectory, ApiIdentifier, ApiOrder, ApiRevocation};
 use crate::cert::Certificate;
 use crate::order::{NewOrder, Order};
-use crate::persist::{Persist, PersistKey, PersistKind};
 use crate::req::req_expect_header;
 use crate::trans::Transport;
 use crate::util::{base64url, read_json};
@@ -15,10 +14,8 @@ mod akey;
 pub(crate) use self::akey::AcmeKey;
 
 #[derive(Clone, Debug)]
-pub(crate) struct AccountInner<P: Persist> {
-    pub persist: P,
+pub(crate) struct AccountInner {
     pub transport: Transport,
-    pub realm: String,
     pub api_account: ApiAccount,
     pub api_directory: ApiDirectory,
 }
@@ -38,23 +35,19 @@ pub(crate) struct AccountInner<P: Persist> {
 ///
 /// [`Directory::account`]: struct.Directory.html#method.account
 #[derive(Clone)]
-pub struct Account<P: Persist> {
-    inner: Arc<AccountInner<P>>,
+pub struct Account {
+    inner: Arc<AccountInner>,
 }
 
-impl<P: Persist> Account<P> {
+impl Account {
     pub(crate) fn new(
-        persist: P,
         transport: Transport,
-        realm: &str,
         api_account: ApiAccount,
         api_directory: ApiDirectory,
     ) -> Self {
         Account {
             inner: Arc::new(AccountInner {
-                persist,
                 transport,
-                realm: realm.to_string(),
                 api_account,
                 api_directory,
             }),
@@ -66,42 +59,6 @@ impl<P: Persist> Account<P> {
     /// The key is an elliptic curve private key.
     pub fn acme_private_key_pem(&self) -> String {
         String::from_utf8(self.inner.transport.acme_key().to_pem()).expect("from_utf8")
-    }
-
-    /// Get an already issued and [downloaded] certificate.
-    ///
-    /// Every time a certificate is downloaded, the certificate and corresponding
-    /// private key are persisted. This method returns an already existing certificate
-    /// from the local storage (no API calls involved).
-    ///
-    /// This can form the basis for implemeting automatic renewal of
-    /// certificates where the [valid days left] are running low.
-    ///
-    /// [downloaded]: order/struct.CertOrder.html#method.download_and_save_cert
-    /// [valid days left]: struct.Certificate.html#method.valid_days_left
-    pub fn certificate(&self, primary_name: &str) -> Result<Option<Certificate>> {
-        // details needed for persistence
-        let realm = &self.inner.realm;
-        let persist = &self.inner.persist;
-
-        // read primary key
-        let pk_key = PersistKey::new(realm, PersistKind::PrivateKey, primary_name);
-        debug!("Read private key: {}", pk_key);
-        let private_key = persist
-            .get(&pk_key)?
-            .and_then(|s| String::from_utf8(s).ok());
-
-        // read certificate
-        let pk_crt = PersistKey::new(realm, PersistKind::Certificate, primary_name);
-        debug!("Read certificate: {}", pk_crt);
-        let certificate = persist
-            .get(&pk_crt)?
-            .and_then(|s| String::from_utf8(s).ok());
-
-        Ok(match (private_key, certificate) {
-            (Some(k), Some(c)) => Some(Certificate::new(k, c)),
-            _ => None,
-        })
     }
 
     /// Create a new order to issue a certificate for this account.
@@ -116,7 +73,7 @@ impl<P: Persist> Account<P> {
     /// names supplied are exactly the same.
     ///
     /// [100 names]: https://letsencrypt.org/docs/rate-limits/
-    pub fn new_order(&self, primary_name: &str, alt_names: &[&str]) -> Result<NewOrder<P>> {
+    pub fn new_order(&self, primary_name: &str, alt_names: &[&str]) -> Result<NewOrder> {
         // construct the identifiers
         let prim_arr = [primary_name];
         let domains = prim_arr.iter().chain(alt_names);
