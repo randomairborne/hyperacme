@@ -8,25 +8,30 @@ Uses ACME v2 to issue/renew certificates.
 ## Example
 
 ```rust
-use acme_lib::{Error, Directory, DirectoryUrl};
-use acme_lib::persist::FilePersist;
+use acme_lib::{Error, Certificate, Directory, DirectoryUrl};
 use acme_lib::create_p384_key;
 
-fn request_cert() -> Result<(), Error> {
+fn request_cert() -> Result<Certificate, Error> {
 
 // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
 let url = DirectoryUrl::LetsEncrypt;
 
-// Save/load keys and certificates to current dir.
-let persist = FilePersist::new(".");
-
 // Create a directory entrypoint.
-let dir = Directory::from_url(persist, url)?;
+let dir = Directory::from_url(url)?;
+
+// Your contact addresses, note the `mailto:`
+let contact = vec!["mailto:foo@bar.com".to_string()];
 
 // Reads the private account key from persistence, or
 // creates a new one before accessing the API to establish
 // that it's there.
-let acc = dir.account("foo@bar.com")?;
+let acc = dir.register_account(contact.clone())?;
+
+// You should only call `register_account` once, store the private (eg. in a
+// file) and use `load_account] afterwards.
+let privkey = acc.acme_private_key_pem();
+// XXX: write privatekey to disk, afterwards you can load it like this:
+let acc = dir.load_account(&privkey, contact)?;
 
 // Order a new TLS certificate for a domain.
 let mut ord_new = acc.new_order("mydomain.io", &[])?;
@@ -95,9 +100,9 @@ let ord_cert =
 
 // Now download the certificate. Also stores the cert in
 // the persistence.
-let cert = ord_cert.download_and_save_cert()?;
+let cert = ord_cert.download_cert()?;
 
-Ok(())
+Ok(cert)
 }
 ```
 

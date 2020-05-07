@@ -146,8 +146,9 @@
 //! heavily on the [openssl](https://docs.rs/openssl/) crate to make JWK/JWT and sign requests
 //! to the API.
 //!
-#[macro_use]
-extern crate log;
+
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");
 
 mod acc;
 mod cert;
@@ -160,7 +161,6 @@ mod util;
 
 pub mod api;
 pub mod order;
-// pub mod persist;
 
 #[cfg(test)]
 mod test;

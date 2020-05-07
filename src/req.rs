@@ -1,4 +1,5 @@
 use crate::api::ApiProblem;
+use crate::error::*;
 
 pub(crate) type ReqResult<T> = std::result::Result<T, ApiProblem>;
 
