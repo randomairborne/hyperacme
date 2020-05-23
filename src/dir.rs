@@ -1,13 +1,15 @@
 //
 use std::sync::Arc;
 
-use crate::acc::AcmeKey;
-use crate::api::{ApiAccount, ApiDirectory};
-use crate::error::*;
-use crate::req::{req_expect_header, req_get, req_handle_error};
-use crate::trans::{NoncePool, Transport};
-use crate::util::read_json;
-use crate::Account;
+use crate::{
+    acc::AcmeKey,
+    api::{ApiAccount, ApiDirectory},
+    error::*,
+    req::{req_expect_header, req_get, req_handle_error},
+    trans::{NoncePool, Transport},
+    util::read_json,
+    Account,
+};
 
 const LETSENCRYPT: &str = "https://acme-v02.api.letsencrypt.org/directory";
 const LETSENCRYPT_STAGING: &str = "https://acme-staging-v02.api.letsencrypt.org/directory";
@@ -56,7 +58,7 @@ impl Directory {
     }
 
     pub fn register_account(&self, contact: Vec<String>) -> Result<Account> {
-        let acme_key = AcmeKey::new();
+        let acme_key = AcmeKey::new()?;
         self.upsert_account(acme_key, contact)
     }
 
@@ -115,9 +117,7 @@ mod test {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
         let dir = Directory::from_url(url)?;
-        let _ = dir.register_account(vec![
-            "mailto:foo@bar.com".to_string(),
-        ])?;
+        let _ = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
         Ok(())
     }
 

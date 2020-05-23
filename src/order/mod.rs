@@ -17,16 +17,15 @@
 //! [`Challenge`]: struct.Challenge.html
 //! [`CsrOrder`]: struct.CsrOrder.html
 //! [`CertOrder`]: struct.CertOrder.html
+use crate::{
+    acc::AccountInner,
+    api::{ApiAuth, ApiEmptyString, ApiFinalize, ApiOrder},
+    cert::{create_csr, Certificate},
+    error::*,
+    util::{base64url, read_json},
+};
 use openssl::pkey::{self, PKey};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
-
-use crate::acc::AccountInner;
-use crate::api::{ApiAuth, ApiEmptyString, ApiFinalize, ApiOrder};
-use crate::cert::{create_csr, Certificate};
-use crate::error::*;
-use crate::util::{base64url, read_json};
+use std::{sync::Arc, thread, time::Duration};
 
 mod auth;
 
@@ -230,7 +229,7 @@ impl CsrOrder {
         let csr = create_csr(&private_key, &domains)?;
 
         // this is not the same as PEM.
-        let csr_der = csr.to_der().expect("to_der()");
+        let csr_der = csr.to_der()?;
         let csr_enc = base64url(&csr_der);
         let finalize = ApiFinalize { csr: csr_enc };
 
@@ -260,11 +259,7 @@ impl CsrOrder {
     }
 }
 
-fn wait_for_order_status(
-    inner: &Arc<AccountInner>,
-    url: &str,
-    delay_millis: u64,
-) -> Result<Order> {
+fn wait_for_order_status(inner: &Arc<AccountInner>, url: &str, delay_millis: u64) -> Result<Order> {
     loop {
         let order = refresh_order(inner, url.to_string(), "valid")?;
         if !order.api_order.is_status_processing() {
@@ -284,13 +279,17 @@ impl CertOrder {
     /// Request download of the issued certificate.
     pub fn download_cert(self) -> Result<Certificate> {
         //
-        let url = self.order.api_order.certificate.expect("certificate url");
+        let url = self
+            .order
+            .api_order
+            .certificate
+            .ok_or(anyhow::anyhow!("certificate url"))?;
         let inner = self.order.inner;
 
         let res = inner.transport.call(&url, &ApiEmptyString)?;
 
         // save key and cert into persistence
-        let pkey_pem_bytes = self.private_key.private_key_to_pem_pkcs8().expect("to_pem");
+        let pkey_pem_bytes = self.private_key.private_key_to_pem_pkcs8()?;
         let pkey_pem = String::from_utf8_lossy(&pkey_pem_bytes);
 
         let cert = res.into_string()?;
@@ -314,9 +313,7 @@ mod test {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
         let dir = Directory::from_url(url)?;
-        let acc = dir.register_account(vec![
-            "mailto:foo@bar.com".to_string(),
-        ])?;
+        let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
         let _ = ord.authorizations()?;
         Ok(())
@@ -327,13 +324,11 @@ mod test {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
         let dir = Directory::from_url(url)?;
-        let acc = dir.register_account(vec![
-            "mailto:foo@bar.com".to_string(),
-        ])?;
+        let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
-        let pkey = cert::create_p256_key();
+        let pkey = cert::create_p256_key().unwrap();
         let _ord = ord.finalize_pkey(pkey, 1)?;
         Ok(())
     }
@@ -343,20 +338,18 @@ mod test {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
         let dir = Directory::from_url(url)?;
-        let acc = dir.register_account(vec![
-            "mailto:foo@bar.com".to_string(),
-        ])?;
+        let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
 
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
-        let pkey = cert::create_p256_key();
+        let pkey = cert::create_p256_key().unwrap();
         let ord = ord.finalize_pkey(pkey, 1)?;
 
         let cert = ord.download_cert()?;
         assert_eq!("CERT HERE", cert.certificate());
         assert!(!cert.private_key().is_empty());
-        assert_eq!(cert.valid_days_left(), 89);
+        assert_eq!(cert.valid_days_left().unwrap(), 89);
 
         Ok(())
     }

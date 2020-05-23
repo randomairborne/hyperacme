@@ -12,14 +12,13 @@ pub(crate) struct AcmeKey {
 }
 
 impl AcmeKey {
-    pub(crate) fn new() -> AcmeKey {
-        let pri_key = EcKey::generate(&*EC_GROUP_P256).expect("EcKey");
-        Self::from_key(pri_key)
+    pub(crate) fn new() -> Result<AcmeKey> {
+        let pri_key = EcKey::generate(&*EC_GROUP_P256).context("EcKey")?;
+        Ok(Self::from_key(pri_key))
     }
 
     pub(crate) fn from_pem(pem: &[u8]) -> Result<AcmeKey> {
-        let pri_key = EcKey::private_key_from_pem(pem)
-            .context("Failed to read PEM")?;
+        let pri_key = EcKey::private_key_from_pem(pem).context("Failed to read PEM")?;
         Ok(Self::from_key(pri_key))
     }
 
@@ -30,10 +29,12 @@ impl AcmeKey {
         }
     }
 
-    pub(crate) fn to_pem(&self) -> Vec<u8> {
-        self.private_key
+    pub(crate) fn to_pem(&self) -> Result<Vec<u8>> {
+        let pem = self
+            .private_key
             .private_key_to_pem()
-            .expect("private_key_to_pem")
+            .context("private_key_to_pem")?;
+        Ok(pem)
     }
 
     pub(crate) fn private_key(&self) -> &EcKey<pkey::Private> {

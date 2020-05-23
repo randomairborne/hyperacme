@@ -57,8 +57,9 @@ impl Account {
     /// Private key for this account.
     ///
     /// The key is an elliptic curve private key.
-    pub fn acme_private_key_pem(&self) -> String {
-        String::from_utf8(self.inner.transport.acme_key().to_pem()).expect("from_utf8")
+    pub fn acme_private_key_pem(&self) -> Result<String> {
+        let pem = String::from_utf8(self.inner.transport.acme_key().to_pem()?)?;
+        Ok(pem)
     }
 
     /// Create a new order to issue a certificate for this account.
@@ -100,7 +101,7 @@ impl Account {
     /// Revoke a certificate for the reason given.
     pub fn revoke_certificate(&self, cert: &Certificate, reason: RevocationReason) -> Result<()> {
         // convert to base64url of the DER (which is not PEM).
-        let certificate = base64url(&cert.certificate_der());
+        let certificate = base64url(&cert.certificate_der()?);
 
         let revoc = ApiRevocation {
             certificate,
@@ -145,9 +146,7 @@ mod test {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
         let dir = Directory::from_url(url)?;
-        let acc = dir.register_account(vec![
-            "mailto:foo@bar.com".to_string(),
-        ])?;
+        let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
         let _ = acc.new_order("acmetest.example.com", &[])?;
         Ok(())
     }
