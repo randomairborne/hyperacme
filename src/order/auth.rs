@@ -78,7 +78,7 @@ impl Auth {
     ///     format!("/var/www/.well-known/acme-challenge/{}", token)
     ///   };
     ///   let mut file = File::create(&path)?;
-    ///   file.write_all(challenge.http_proof().unwrap().as_bytes())?;
+    ///   file.write_all(challenge.http_proof()?.as_bytes())?;
     ///   challenge.validate(5000)?;
     ///   Ok(())
     /// }

@@ -328,7 +328,7 @@ mod test {
         let ord = acc.new_order("acmetest.example.com", &[])?;
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
-        let pkey = cert::create_p256_key().unwrap();
+        let pkey = cert::create_p256_key()?;
         let _ord = ord.finalize_pkey(pkey, 1)?;
         Ok(())
     }
@@ -343,13 +343,13 @@ mod test {
 
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
-        let pkey = cert::create_p256_key().unwrap();
+        let pkey = cert::create_p256_key()?;
         let ord = ord.finalize_pkey(pkey, 1)?;
 
         let cert = ord.download_cert()?;
         assert_eq!("CERT HERE", cert.certificate());
         assert!(!cert.private_key().is_empty());
-        assert_eq!(cert.valid_days_left().unwrap(), 89);
+        assert_eq!(cert.valid_days_left()?, 89);
 
         Ok(())
     }
