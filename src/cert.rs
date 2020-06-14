@@ -13,8 +13,8 @@ use openssl::{
 use crate::error::*;
 
 lazy_static! {
-    pub(crate) static ref EC_GROUP_P256: EcGroup = { ec_group(Nid::X9_62_PRIME256V1) };
-    pub(crate) static ref EC_GROUP_P384: EcGroup = { ec_group(Nid::SECP384R1) };
+    pub(crate) static ref EC_GROUP_P256: EcGroup = ec_group(Nid::X9_62_PRIME256V1);
+    pub(crate) static ref EC_GROUP_P384: EcGroup = ec_group(Nid::SECP384R1);
 }
 
 fn ec_group(nid: Nid) -> EcGroup {
