@@ -28,7 +28,7 @@ let contact = vec!["mailto:foo@bar.com".to_string()];
 let acc = dir.register_account(contact.clone())?;
 
 // Example of how to load an account from string:
-let privkey = acc.acme_private_key_pem();
+let privkey = acc.acme_private_key_pem()?;
 let acc = dir.load_account(&privkey, contact)?;
 
 // Order a new TLS certificate for a domain.
@@ -57,14 +57,14 @@ let ord_csr = loop {
     // certificate for:
     //
     // http://mydomain.io/.well-known/acme-challenge/<token>
-    let chall = auths[0].http_challenge();
+    let chall = auths[0].http_challenge().unwrap();
 
     // The token is the filename.
     let token = chall.http_token();
     let path = format!(".well-known/acme-challenge/{}", token);
 
     // The proof is the contents of the file
-    let proof = chall.http_proof();
+    let proof = chall.http_proof()?;
 
     // Here you must do "something" to place
     // the file/contents in the correct place.
@@ -87,7 +87,7 @@ let ord_csr = loop {
 // Ownership is proven. Create a private key for
 // the certificate. These are provided for convenience, you
 // can provide your own keypair instead if you want.
-let pkey_pri = create_p384_key();
+let pkey_pri = create_p384_key()?;
 
 // Submit the CSR. This causes the ACME provider to enter a
 // state of "processing" that must be polled until the

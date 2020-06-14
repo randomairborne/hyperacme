@@ -2,7 +2,10 @@ use openssl::ecdsa::EcdsaSig;
 use openssl::sha::sha256;
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::{
+    convert::TryInto,
+    sync::{Arc, Mutex},
+};
 
 use crate::acc::AcmeKey;
 use crate::error::*;
@@ -153,7 +156,7 @@ fn jws_with_jwk<T: Serialize + ?Sized>(
     key: &AcmeKey,
     payload: &T,
 ) -> Result<String> {
-    let jwk: Jwk = key.into();
+    let jwk: Jwk = key.try_into()?;
     let protected = JwsProtected::new_jwk(jwk, url, nonce);
     jws_with(protected, key, payload)
 }
@@ -180,7 +183,7 @@ fn jws_with<T: Serialize + ?Sized>(
 
     let to_sign = format!("{}.{}", protected, payload);
     let digest = sha256(to_sign.as_bytes());
-    let sig = EcdsaSig::sign(&digest, key.private_key()).expect("EcdsaSig::sign");
+    let sig = EcdsaSig::sign(&digest, key.private_key())?;
     let r = sig.r().to_vec();
     let s = sig.s().to_vec();
 
