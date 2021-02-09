@@ -283,7 +283,7 @@ impl CertOrder {
             .order
             .api_order
             .certificate
-            .ok_or(anyhow::anyhow!("certificate url"))?;
+            .ok_or_else(|| anyhow::anyhow!("certificate url"))?;
         let inner = self.order.inner;
 
         let res = inner.transport.call(&url, &ApiEmptyString)?;
