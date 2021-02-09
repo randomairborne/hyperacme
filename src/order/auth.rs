@@ -69,6 +69,7 @@ impl Auth {
     /// use acme_micro::Error;
     /// use std::fs::File;
     /// use std::io::Write;
+    /// use std::time::Duration;
     ///
     /// fn web_authorize(auth: &Auth) -> Result<(), Error> {
     ///   let challenge = auth.http_challenge().unwrap();
@@ -79,7 +80,7 @@ impl Auth {
     ///   };
     ///   let mut file = File::create(&path)?;
     ///   file.write_all(challenge.http_proof()?.as_bytes())?;
-    ///   challenge.validate(5000)?;
+    ///   challenge.validate(Duration::from_millis(5000))?;
     ///   Ok(())
     /// }
     /// ```
@@ -102,12 +103,13 @@ impl Auth {
     /// ```no_run
     /// use acme_micro::order::Auth;
     /// use acme_micro::Error;
+    /// use std::time::Duration;
     ///
     /// fn dns_authorize(auth: &Auth) -> Result<(), Error> {
     ///   let challenge = auth.dns_challenge().unwrap();
     ///   let record = format!("_acme-challenge.{}.", auth.domain_name());
     ///   // route_53_set_record(&record, "TXT", challenge.dns_proof());
-    ///   challenge.validate(5000)?;
+    ///   challenge.validate(Duration::from_millis(5000))?;
     ///   Ok(())
     /// }
     /// ```

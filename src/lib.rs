@@ -9,6 +9,7 @@
 //! ```no_run
 //! use acme_micro::{Error, Certificate, Directory, DirectoryUrl};
 //! use acme_micro::create_p384_key;
+//! use std::time::Duration;
 //!
 //! fn request_cert() -> Result<Certificate, Error> {
 //!
@@ -76,7 +77,7 @@
 //!     // confirm ownership of the domain, or fail due to the
 //!     // not finding the proof. To see the change, we poll
 //!     // the API with 5000 milliseconds wait between.
-//!     chall.validate(5000)?;
+//!     chall.validate(Duration::from_millis(5000))?;
 //!
 //!     // Update the state against the ACME API.
 //!     ord_new.refresh()?;
