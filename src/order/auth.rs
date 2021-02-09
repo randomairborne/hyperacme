@@ -2,7 +2,7 @@
 use openssl::sha::sha256;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 
 use crate::acc::AccountInner;
 use crate::acc::AcmeKey;
@@ -71,23 +71,22 @@ impl Auth {
     /// use std::io::Write;
     ///
     /// fn web_authorize(auth: &Auth) -> Result<(), Error> {
-    ///   let challenge = auth.http_challenge();
+    ///   let challenge = auth.http_challenge().unwrap();
     ///   // Assuming our web server's root is under /var/www
     ///   let path = {
     ///     let token = challenge.http_token();
     ///     format!("/var/www/.well-known/acme-challenge/{}", token)
     ///   };
     ///   let mut file = File::create(&path)?;
-    ///   file.write_all(challenge.http_proof().as_bytes())?;
+    ///   file.write_all(challenge.http_proof()?.as_bytes())?;
     ///   challenge.validate(5000)?;
     ///   Ok(())
     /// }
     /// ```
-    pub fn http_challenge(&self) -> Challenge<Http> {
+    pub fn http_challenge(&self) -> Option<Challenge<Http>> {
         self.api_auth
             .http_challenge()
             .map(|c| Challenge::new(&self.inner, c.clone(), &self.auth_url))
-            .expect("http-challenge")
     }
 
     /// Get the dns challenge.
@@ -105,7 +104,7 @@ impl Auth {
     /// use acme_micro::Error;
     ///
     /// fn dns_authorize(auth: &Auth) -> Result<(), Error> {
-    ///   let challenge = auth.dns_challenge();
+    ///   let challenge = auth.dns_challenge().unwrap();
     ///   let record = format!("_acme-challenge.{}.", auth.domain_name());
     ///   // route_53_set_record(&record, "TXT", challenge.dns_proof());
     ///   challenge.validate(5000)?;
@@ -114,11 +113,10 @@ impl Auth {
     /// ```
     ///
     /// The dns proof is not the same as the http proof.
-    pub fn dns_challenge(&self) -> Challenge<Dns> {
+    pub fn dns_challenge(&self) -> Option<Challenge<Dns>> {
         self.api_auth
             .dns_challenge()
             .map(|c| Challenge::new(&self.inner, c.clone(), &self.auth_url))
-            .expect("dns-challenge")
     }
 
     /// Get the TLS ALPN challenge.
@@ -128,11 +126,10 @@ impl Auth {
     /// must contain a single dNSName SAN containing the domain being
     /// validated, as well as an ACME extension containing the SHA256 of the
     /// key authorization.
-    pub fn tls_alpn_challenge(&self) -> Challenge<TlsAlpn> {
+    pub fn tls_alpn_challenge(&self) -> Option<Challenge<TlsAlpn>> {
         self.api_auth
             .tls_alpn_challenge()
             .map(|c| Challenge::new(&self.inner, c.clone(), &self.auth_url))
-            .expect("tls-alpn-challenge")
     }
 
     /// Access the underlying JSON object for debugging. We don't
@@ -177,9 +174,10 @@ impl Challenge<Http> {
     }
 
     /// The `proof` is some text content that is placed in the file named by `token`.
-    pub fn http_proof(&self) -> String {
+    pub fn http_proof(&self) -> Result<String> {
         let acme_key = self.inner.transport.acme_key();
-        key_authorization(&self.api_challenge.token, acme_key, false)
+        let proof = key_authorization(&self.api_challenge.token, acme_key, false)?;
+        Ok(proof)
     }
 }
 
@@ -189,18 +187,20 @@ impl Challenge<Dns> {
     /// ```text
     /// _acme-challenge.<domain-to-be-proven>.  TXT  <proof>
     /// ```
-    pub fn dns_proof(&self) -> String {
+    pub fn dns_proof(&self) -> Result<String> {
         let acme_key = self.inner.transport.acme_key();
-        key_authorization(&self.api_challenge.token, acme_key, true)
+        let proof = key_authorization(&self.api_challenge.token, acme_key, true)?;
+        Ok(proof)
     }
 }
 
 impl Challenge<TlsAlpn> {
     /// The `proof` is the contents of the ACME extension to be placed in the
     /// certificate used for validation.
-    pub fn tls_alpn_proof(&self) -> [u8; 32] {
+    pub fn tls_alpn_proof(&self) -> Result<[u8; 32]> {
         let acme_key = self.inner.transport.acme_key();
-        sha256(key_authorization(&self.api_challenge.token, acme_key, false).as_bytes())
+        let proof = key_authorization(&self.api_challenge.token, acme_key, false)?;
+        Ok(sha256(proof.as_bytes()))
     }
 }
 
@@ -257,17 +257,18 @@ impl<A> Challenge<A> {
     }
 }
 
-fn key_authorization(token: &str, key: &AcmeKey, extra_sha256: bool) -> String {
-    let jwk: Jwk = key.into();
+fn key_authorization(token: &str, key: &AcmeKey, extra_sha256: bool) -> Result<String> {
+    let jwk: Jwk = key.try_into()?;
     let jwk_thumb: JwkThumb = (&jwk).into();
-    let jwk_json = serde_json::to_string(&jwk_thumb).expect("jwk_thumb");
+    let jwk_json = serde_json::to_string(&jwk_thumb)?;
     let digest = base64url(&sha256(jwk_json.as_bytes()));
     let key_auth = format!("{}.{}", token, digest);
-    if extra_sha256 {
+    let res = if extra_sha256 {
         base64url(&sha256(key_auth.as_bytes()))
     } else {
         key_auth
-    }
+    };
+    Ok(res)
 }
 
 fn wait_for_auth_status(
@@ -295,19 +296,17 @@ mod test {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
         let dir = Directory::from_url(url)?;
-        let acc = dir.register_account(vec![
-            "mailto:foo@bar.com".to_string(),
-        ])?;
+        let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
         let ord = acc.new_order("acmetest.example.com", &[])?;
         let authz = ord.authorizations()?;
         assert!(authz.len() == 1);
         let auth = &authz[0];
         {
-            let http = auth.http_challenge();
+            let http = auth.http_challenge().unwrap();
             assert!(http.need_validate());
         }
         {
-            let dns = auth.dns_challenge();
+            let dns = auth.dns_challenge().unwrap();
             assert!(dns.need_validate());
         }
         Ok(())

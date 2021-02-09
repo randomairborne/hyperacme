@@ -1,18 +1,20 @@
+use crate::error::Result;
 use lazy_static::lazy_static;
-use openssl::ec::{Asn1Flag, EcGroup, EcKey};
-use openssl::hash::MessageDigest;
-use openssl::nid::Nid;
-use openssl::pkey::{self, PKey};
-use openssl::rsa::Rsa;
-use openssl::stack::Stack;
-use openssl::x509::extension::SubjectAlternativeName;
-use openssl::x509::{X509Req, X509ReqBuilder, X509};
+use openssl::{
+    ec::{Asn1Flag, EcGroup, EcKey},
+    hash::MessageDigest,
+    nid::Nid,
+    pkey::{self, PKey},
+    rsa::Rsa,
+    stack::Stack,
+    x509::{extension::SubjectAlternativeName, X509Req, X509ReqBuilder, X509},
+};
 
 use crate::error::*;
 
 lazy_static! {
-    pub(crate) static ref EC_GROUP_P256: EcGroup = { ec_group(Nid::X9_62_PRIME256V1) };
-    pub(crate) static ref EC_GROUP_P384: EcGroup = { ec_group(Nid::SECP384R1) };
+    pub(crate) static ref EC_GROUP_P256: EcGroup = ec_group(Nid::X9_62_PRIME256V1);
+    pub(crate) static ref EC_GROUP_P384: EcGroup = ec_group(Nid::SECP384R1);
 }
 
 fn ec_group(nid: Nid) -> EcGroup {
@@ -26,33 +28,36 @@ fn ec_group(nid: Nid) -> EcGroup {
 ///
 /// This library does not check the number of bits used to create the key pair.
 /// For Let's Encrypt, the bits must be between 2048 and 4096.
-pub fn create_rsa_key(bits: u32) -> PKey<pkey::Private> {
-    let pri_key_rsa = Rsa::generate(bits).expect("Rsa::generate");
-    PKey::from_rsa(pri_key_rsa).expect("from_rsa")
+pub fn create_rsa_key(bits: u32) -> Result<PKey<pkey::Private>> {
+    let pri_key_rsa = Rsa::generate(bits)?;
+    let pkey = PKey::from_rsa(pri_key_rsa)?;
+    Ok(pkey)
 }
 
 /// Make a P-256 private key (from which we can derive a public key).
-pub fn create_p256_key() -> PKey<pkey::Private> {
-    let pri_key_ec = EcKey::generate(&*EC_GROUP_P256).expect("EcKey");
-    PKey::from_ec_key(pri_key_ec).expect("from_ec_key")
+pub fn create_p256_key() -> Result<PKey<pkey::Private>> {
+    let pri_key_ec = EcKey::generate(&*EC_GROUP_P256)?;
+    let pkey = PKey::from_ec_key(pri_key_ec)?;
+    Ok(pkey)
 }
 
 /// Make a P-384 private key pair (from which we can derive a public key).
-pub fn create_p384_key() -> PKey<pkey::Private> {
-    let pri_key_ec = EcKey::generate(&*EC_GROUP_P384).expect("EcKey");
-    PKey::from_ec_key(pri_key_ec).expect("from_ec_key")
+pub fn create_p384_key() -> Result<PKey<pkey::Private>> {
+    let pri_key_ec = EcKey::generate(&*EC_GROUP_P384)?;
+    let pkey = PKey::from_ec_key(pri_key_ec)?;
+    Ok(pkey)
 }
 
 pub(crate) fn create_csr(pkey: &PKey<pkey::Private>, domains: &[&str]) -> Result<X509Req> {
     //
     // the csr builder
-    let mut req_bld = X509ReqBuilder::new().expect("X509ReqBuilder");
+    let mut req_bld = X509ReqBuilder::new()?;
 
     // set private/public key in builder
-    req_bld.set_pubkey(&pkey).expect("set_pubkey");
+    req_bld.set_pubkey(&pkey)?;
 
     // set all domains as alt names
-    let mut stack = Stack::new().expect("Stack::new");
+    let mut stack = Stack::new()?;
     let ctx = req_bld.x509v3_context(None);
     let as_lst = domains
         .iter()
@@ -62,14 +67,12 @@ pub(crate) fn create_csr(pkey: &PKey<pkey::Private>, domains: &[&str]) -> Result
     let as_lst = as_lst[4..].to_string();
     let mut an = SubjectAlternativeName::new();
     an.dns(&as_lst);
-    let ext = an.build(&ctx).expect("SubjectAlternativeName::build");
+    let ext = an.build(&ctx)?;
     stack.push(ext).expect("Stack::push");
-    req_bld.add_extensions(&stack).expect("add_extensions");
+    req_bld.add_extensions(&stack)?;
 
     // sign it
-    req_bld
-        .sign(pkey, MessageDigest::sha256())
-        .expect("csr_sign");
+    req_bld.sign(pkey, MessageDigest::sha256())?;
 
     // the csr
     Ok(req_bld.build())
@@ -108,9 +111,10 @@ impl Certificate {
     }
 
     /// The private key as DER.
-    pub fn private_key_der(&self) -> Vec<u8> {
-        let pkey = PKey::private_key_from_pem(self.private_key.as_bytes()).expect("from_pem");
-        pkey.private_key_to_der().expect("private_key_to_der")
+    pub fn private_key_der(&self) -> Result<Vec<u8>> {
+        let pkey = PKey::private_key_from_pem(self.private_key.as_bytes())?;
+        let der = pkey.private_key_to_der()?;
+        Ok(der)
     }
 
     /// The PEM encoded issued certificate.
@@ -119,9 +123,10 @@ impl Certificate {
     }
 
     /// The issued certificate as DER.
-    pub fn certificate_der(&self) -> Vec<u8> {
-        let x509 = X509::from_pem(self.certificate.as_bytes()).expect("from_pem");
-        x509.to_der().expect("to_der")
+    pub fn certificate_der(&self) -> Result<Vec<u8>> {
+        let x509 = X509::from_pem(self.certificate.as_bytes())?;
+        let der = x509.to_der()?;
+        Ok(der)
     }
 
     /// Inspect the certificate to count the number of (whole) valid days left.
@@ -131,29 +136,30 @@ impl Certificate {
     /// issued cert, since it counts _whole_ days.
     ///
     /// It is possible to get negative days for an expired certificate.
-    pub fn valid_days_left(&self) -> i64 {
+    pub fn valid_days_left(&self) -> Result<i64> {
         // the cert used in the tests is not valid to load as x509
         if cfg!(test) {
-            return 89;
+            return Ok(89);
         }
 
         // load as x509
-        let x509 = X509::from_pem(self.certificate.as_bytes()).expect("from_pem");
+        let x509 = X509::from_pem(self.certificate.as_bytes())?;
 
         // convert asn1 time to Tm
         let not_after = format!("{}", x509.not_after());
         // Display trait produces this format, which is kinda dumb.
         // Apr 19 08:48:46 2019 GMT
-        let expires = parse_date(&not_after);
+        let expires = parse_date(&not_after)?;
         let dur = expires - time::now();
 
-        dur.num_days()
+        Ok(dur.num_days())
     }
 }
 
-fn parse_date(s: &str) -> time::Tm {
+fn parse_date(s: &str) -> Result<time::Tm> {
     debug!("Parse date/time: {}", s);
-    time::strptime(s, "%h %e %H:%M:%S %Y %Z").expect("strptime")
+    let tm = time::strptime(s, "%h %e %H:%M:%S %Y %Z")?;
+    Ok(tm)
 }
 
 #[cfg(test)]
@@ -162,7 +168,7 @@ mod test {
 
     #[test]
     fn test_parse_date() {
-        let x = parse_date("May  3 07:40:15 2019 GMT");
+        let x = parse_date("May  3 07:40:15 2019 GMT").unwrap();
         assert_eq!(time::strftime("%F %T", &x).unwrap(), "2019-05-03 07:40:15");
     }
 }
