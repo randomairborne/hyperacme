@@ -69,6 +69,7 @@ impl Auth {
     /// use acme_micro::Error;
     /// use std::fs::File;
     /// use std::io::Write;
+    /// use std::time::Duration;
     ///
     /// fn web_authorize(auth: &Auth) -> Result<(), Error> {
     ///   let challenge = auth.http_challenge().unwrap();
@@ -79,7 +80,7 @@ impl Auth {
     ///   };
     ///   let mut file = File::create(&path)?;
     ///   file.write_all(challenge.http_proof()?.as_bytes())?;
-    ///   challenge.validate(5000)?;
+    ///   challenge.validate(Duration::from_millis(5000))?;
     ///   Ok(())
     /// }
     /// ```
@@ -102,12 +103,13 @@ impl Auth {
     /// ```no_run
     /// use acme_micro::order::Auth;
     /// use acme_micro::Error;
+    /// use std::time::Duration;
     ///
     /// fn dns_authorize(auth: &Auth) -> Result<(), Error> {
     ///   let challenge = auth.dns_challenge().unwrap();
     ///   let record = format!("_acme-challenge.{}.", auth.domain_name());
     ///   // route_53_set_record(&record, "TXT", challenge.dns_proof());
-    ///   challenge.validate(5000)?;
+    ///   challenge.validate(Duration::from_millis(5000))?;
     ///   Ok(())
     /// }
     /// ```
@@ -224,19 +226,19 @@ impl<A> Challenge<A> {
     ///
     /// The user must first update the DNS record or HTTP web server depending
     /// on the type challenge being validated.
-    pub fn validate(self, delay_millis: u64) -> Result<()> {
+    pub fn validate(&self, delay: Duration) -> Result<()> {
         let url_chall = &self.api_challenge.url;
         let res = self.inner.transport.call(url_chall, &ApiEmptyObject)?;
         let _: ApiChallenge = read_json(res)?;
 
-        let auth = wait_for_auth_status(&self.inner, &self.auth_url, delay_millis)?;
+        let auth = wait_for_auth_status(&self.inner, &self.auth_url, delay)?;
 
         if !auth.is_status_valid() {
             let error = auth
                 .challenges
                 .iter()
                 .filter_map(|c| c.error.as_ref())
-                .nth(0);
+                .next();
             let reason = if let Some(error) = error {
                 format!(
                     "Failed: {}",
@@ -274,7 +276,7 @@ fn key_authorization(token: &str, key: &AcmeKey, extra_sha256: bool) -> Result<S
 fn wait_for_auth_status(
     inner: &Arc<AccountInner>,
     auth_url: &str,
-    delay_millis: u64,
+    delay: Duration,
 ) -> Result<ApiAuth> {
     let auth = loop {
         let res = inner.transport.call(auth_url, &ApiEmptyString)?;
@@ -282,7 +284,7 @@ fn wait_for_auth_status(
         if !auth.is_status_pending() {
             break auth;
         }
-        thread::sleep(Duration::from_millis(delay_millis));
+        thread::sleep(delay);
     };
     Ok(auth)
 }
