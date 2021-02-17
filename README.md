@@ -95,7 +95,7 @@ let pkey_pri = create_p384_key()?;
 // certificate is either issued or rejected. Again we poll
 // for the status change.
 let ord_cert =
-    ord_csr.finalize_pkey(pkey_pri, 5000)?;
+    ord_csr.finalize_pkey(pkey_pri, Duration::from_millis(5000))?;
 
 // Finally download the certificate.
 let cert = ord_cert.download_cert()?;

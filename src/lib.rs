@@ -93,7 +93,7 @@
 //! // certificate is either issued or rejected. Again we poll
 //! // for the status change.
 //! let ord_cert =
-//!     ord_csr.finalize_pkey(pkey_pri, 5000)?;
+//!     ord_csr.finalize_pkey(pkey_pri, Duration::from_millis(5000))?;
 //!
 //! // Now download the certificate. Also stores the cert in
 //! // the persistence.
@@ -128,7 +128,7 @@
 //! ## Rate limits
 //!
 //! The ACME API provider Let's Encrypt uses [rate limits] to ensure the API i not being
-//! abused. It might be tempting to put the `delay_millis` really low in some of this
+//! abused. It might be tempting to put the `delay` really low in some of this
 //! libraries' polling calls, but balance this against the real risk of having access
 //! cut off.
 //!

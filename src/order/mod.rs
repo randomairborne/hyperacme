@@ -197,16 +197,16 @@ impl CsrOrder {
     /// Finalize the order by providing a private key as PEM.
     ///
     /// Once the CSR has been submitted, the order goes into a `processing` status,
-    /// where we must poll until the status changes. The `delay_millis` is the
+    /// where we must poll until the status changes. The `delay` is the
     /// amount of time to wait between each poll attempt.
     ///
     /// This is a convenience wrapper that in turn calls the lower level [`finalize_pkey`].
     ///
     /// [`finalize_pkey`]: struct.CsrOrder.html#method.finalize_pkey
-    pub fn finalize(self, private_key_pem: &str, delay_millis: u64) -> Result<CertOrder> {
+    pub fn finalize(self, private_key_pem: &str, delay: Duration) -> Result<CertOrder> {
         let pkey_pri = PKey::private_key_from_pem(private_key_pem.as_bytes())
             .context("Error reading private key PEM")?;
-        self.finalize_pkey(pkey_pri, delay_millis)
+        self.finalize_pkey(pkey_pri, delay)
     }
 
     /// Lower level finalize call that works directly with the openssl crate structures.
@@ -214,12 +214,12 @@ impl CsrOrder {
     /// Creates the CSR for the domains in the order and submit it to the ACME API.
     ///
     /// Once the CSR has been submitted, the order goes into a `processing` status,
-    /// where we must poll until the status changes. The `delay_millis` is the
+    /// where we must poll until the status changes. The `delay` is the
     /// amount of time to wait between each poll attempt.
     pub fn finalize_pkey(
         self,
         private_key: PKey<pkey::Private>,
-        delay_millis: u64,
+        delay: Duration,
     ) -> Result<CertOrder> {
         //
         // the domains that we have authorized
@@ -244,7 +244,7 @@ impl CsrOrder {
         // wait for the status to not be processing.
         // valid -> cert is issued
         // invalid -> the whole thing is off
-        let order = wait_for_order_status(&inner, &order_url, delay_millis)?;
+        let order = wait_for_order_status(&inner, &order_url, delay)?;
 
         if !order.api_order.is_status_valid() {
             bail!("Order is in status: {:?}", order.api_order.status);
@@ -259,13 +259,13 @@ impl CsrOrder {
     }
 }
 
-fn wait_for_order_status(inner: &Arc<AccountInner>, url: &str, delay_millis: u64) -> Result<Order> {
+fn wait_for_order_status(inner: &Arc<AccountInner>, url: &str, delay: Duration) -> Result<Order> {
     loop {
         let order = refresh_order(inner, url.to_string(), "valid")?;
         if !order.api_order.is_status_processing() {
             return Ok(order);
         }
-        thread::sleep(Duration::from_millis(delay_millis));
+        thread::sleep(delay);
     }
 }
 
@@ -329,7 +329,7 @@ mod test {
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
         let pkey = cert::create_p256_key()?;
-        let _ord = ord.finalize_pkey(pkey, 1)?;
+        let _ord = ord.finalize_pkey(pkey, Duration::from_millis(1))?;
         Ok(())
     }
 
@@ -344,7 +344,7 @@ mod test {
         // shortcut auth
         let ord = CsrOrder { order: ord.order };
         let pkey = cert::create_p256_key()?;
-        let ord = ord.finalize_pkey(pkey, 1)?;
+        let ord = ord.finalize_pkey(pkey, Duration::from_millis(1))?;
 
         let cert = ord.download_cert()?;
         assert_eq!("CERT HERE", cert.certificate());
