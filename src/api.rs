@@ -346,14 +346,14 @@ pub struct ApiRevocation {
 mod test {
     use super::*;
 
-    #[test]
-    fn test_api_empty_string() {
+    #[tokio::test]
+    async fn test_api_empty_string() {
         let x = serde_json::to_string(&ApiEmptyString).unwrap();
         assert_eq!("\"\"", x);
     }
 
-    #[test]
-    fn test_api_empty_object() {
+    #[tokio::test]
+    async fn test_api_empty_object() {
         let x = serde_json::to_string(&ApiEmptyObject).unwrap();
         assert_eq!("{}", x);
     }

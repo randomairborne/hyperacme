@@ -7,7 +7,7 @@ use std::{convert::TryInto, time::Duration};
 use crate::acc::AccountInner;
 use crate::acc::AcmeKey;
 use crate::api::{ApiAuth, ApiChallenge, ApiEmptyObject, ApiEmptyString};
-use crate::error::*;
+use crate::error;
 use crate::jwt::*;
 use crate::util::{base64url, read_json};
 
@@ -35,7 +35,7 @@ pub struct Auth {
 }
 
 impl Auth {
-    pub(crate) fn new(inner: &Arc<AccountInner>, api_auth: ApiAuth, auth_url: &str) -> Self {
+    pub(crate) async fn new(inner: &Arc<AccountInner>, api_auth: ApiAuth, auth_url: &str) -> Self {
         Auth {
             inner: inner.clone(),
             api_auth,
@@ -44,13 +44,13 @@ impl Auth {
     }
 
     /// Domain name for this authorization.
-    pub fn domain_name(&self) -> &str {
+    pub async fn domain_name(&self) -> &str {
         &self.api_auth.identifier.value
     }
 
     /// Whether we actually need to do the authorization. This might not be needed if we have
     /// proven ownership of the domain recently in a previous order.
-    pub fn need_challenge(&self) -> bool {
+    pub async fn need_challenge(&self) -> bool {
         !self.api_auth.is_status_valid()
     }
 
@@ -84,10 +84,9 @@ impl Auth {
     ///   Ok(())
     /// }
     /// ```
-    pub fn http_challenge(&self) -> Option<Challenge<Http>> {
-        self.api_auth
-            .http_challenge()
-            .map(|c| Challenge::new(&self.inner, c.clone(), &self.auth_url))
+    pub async fn http_challenge(&self) -> Option<Challenge<Http>> {
+        let chall = self.api_auth.http_challenge()?;
+        Some(Challenge::new(&self.inner, chall.clone(), &self.auth_url).await)
     }
 
     /// Get the dns challenge.
@@ -115,10 +114,9 @@ impl Auth {
     /// ```
     ///
     /// The dns proof is not the same as the http proof.
-    pub fn dns_challenge(&self) -> Option<Challenge<Dns>> {
-        self.api_auth
-            .dns_challenge()
-            .map(|c| Challenge::new(&self.inner, c.clone(), &self.auth_url))
+    pub async fn dns_challenge(&self) -> Option<Challenge<Dns>> {
+        let chall = self.api_auth.dns_challenge()?;
+        Some(Challenge::new(&self.inner, chall.clone(), &self.auth_url).await)
     }
 
     /// Get the TLS ALPN challenge.
@@ -128,16 +126,15 @@ impl Auth {
     /// must contain a single dNSName SAN containing the domain being
     /// validated, as well as an ACME extension containing the SHA256 of the
     /// key authorization.
-    pub fn tls_alpn_challenge(&self) -> Option<Challenge<TlsAlpn>> {
-        self.api_auth
-            .tls_alpn_challenge()
-            .map(|c| Challenge::new(&self.inner, c.clone(), &self.auth_url))
+    pub async fn tls_alpn_challenge(&self) -> Option<Challenge<TlsAlpn>> {
+        let chall = self.api_auth.tls_alpn_challenge()?;
+        Some(Challenge::new(&self.inner, chall.clone(), &self.auth_url).await)
     }
 
     /// Access the underlying JSON object for debugging. We don't
     /// refresh the authorization when the corresponding challenge is validated,
     /// so there will be no changes to see here.
-    pub fn api_auth(&self) -> &ApiAuth {
+    pub async fn api_auth(&self) -> &ApiAuth {
         &self.api_auth
     }
 }
@@ -171,14 +168,14 @@ impl Challenge<Http> {
     /// ```text
     /// http://<domain-to-be-proven>/.well-known/acme-challenge/<token>
     /// ```
-    pub fn http_token(&self) -> &str {
+    pub async fn http_token(&self) -> &str {
         &self.api_challenge.token
     }
 
     /// The `proof` is some text content that is placed in the file named by `token`.
-    pub fn http_proof(&self) -> Result<String> {
-        let acme_key = self.inner.transport.acme_key();
-        let proof = key_authorization(&self.api_challenge.token, acme_key, false)?;
+    pub async fn http_proof(&self) -> Result<String, error::Error> {
+        let acme_key = self.inner.transport.acme_key().await;
+        let proof = key_authorization(&self.api_challenge.token, acme_key, false).await?;
         Ok(proof)
     }
 }
@@ -189,9 +186,9 @@ impl Challenge<Dns> {
     /// ```text
     /// _acme-challenge.<domain-to-be-proven>.  TXT  <proof>
     /// ```
-    pub fn dns_proof(&self) -> Result<String> {
-        let acme_key = self.inner.transport.acme_key();
-        let proof = key_authorization(&self.api_challenge.token, acme_key, true)?;
+    pub async fn dns_proof(&self) -> Result<String, error::Error> {
+        let acme_key = self.inner.transport.acme_key().await;
+        let proof = key_authorization(&self.api_challenge.token, acme_key, true).await?;
         Ok(proof)
     }
 }
@@ -199,15 +196,15 @@ impl Challenge<Dns> {
 impl Challenge<TlsAlpn> {
     /// The `proof` is the contents of the ACME extension to be placed in the
     /// certificate used for validation.
-    pub fn tls_alpn_proof(&self) -> Result<[u8; 32]> {
-        let acme_key = self.inner.transport.acme_key();
-        let proof = key_authorization(&self.api_challenge.token, acme_key, false)?;
+    pub async fn tls_alpn_proof(&self) -> Result<[u8; 32], error::Error> {
+        let acme_key = self.inner.transport.acme_key().await;
+        let proof = key_authorization(&self.api_challenge.token, acme_key, false).await?;
         Ok(sha256(proof.as_bytes()))
     }
 }
 
 impl<A> Challenge<A> {
-    fn new(inner: &Arc<AccountInner>, api_challenge: ApiChallenge, auth_url: &str) -> Self {
+    async fn new(inner: &Arc<AccountInner>, api_challenge: ApiChallenge, auth_url: &str) -> Self {
         Challenge {
             inner: inner.clone(),
             api_challenge,
@@ -218,7 +215,7 @@ impl<A> Challenge<A> {
 
     /// Check whether this challlenge really need validation. It might already been
     /// done in a previous order for the same account.
-    pub fn need_validate(&self) -> bool {
+    pub async fn need_validate(&self) -> bool {
         self.api_challenge.is_status_pending()
     }
 
@@ -226,12 +223,16 @@ impl<A> Challenge<A> {
     ///
     /// The user must first update the DNS record or HTTP web server depending
     /// on the type challenge being validated.
-    pub fn validate(&self, delay: Duration) -> Result<()> {
+    pub async fn validate(&self, delay: Duration) -> Result<(), error::Error> {
         let url_chall = &self.api_challenge.url;
-        let res = self.inner.transport.call(url_chall, &ApiEmptyObject)?;
-        let _: ApiChallenge = read_json(res)?;
+        let res = self
+            .inner
+            .transport
+            .call(url_chall, &ApiEmptyObject)
+            .await?;
+        let _: ApiChallenge = read_json(res).await?;
 
-        let auth = wait_for_auth_status(&self.inner, &self.auth_url, delay)?;
+        let auth = wait_for_auth_status(&self.inner, &self.auth_url, delay).await?;
 
         if !auth.is_status_valid() {
             let error = auth
@@ -247,19 +248,26 @@ impl<A> Challenge<A> {
             } else {
                 "Validation failed and no error found".into()
             };
-            bail!("Validation failed: {:?}", reason);
+            return Err(error::Error::LetsEncryptError(format!(
+                "Validation failed: {:?}",
+                reason
+            )));
         }
 
         Ok(())
     }
 
     /// Access the underlying JSON object for debugging.
-    pub fn api_challenge(&self) -> &ApiChallenge {
+    pub async fn api_challenge(&self) -> &ApiChallenge {
         &self.api_challenge
     }
 }
 
-fn key_authorization(token: &str, key: &AcmeKey, extra_sha256: bool) -> Result<String> {
+async fn key_authorization(
+    token: &str,
+    key: &AcmeKey,
+    extra_sha256: bool,
+) -> Result<String, error::Error> {
     let jwk: Jwk = key.try_into()?;
     let jwk_thumb: JwkThumb = (&jwk).into();
     let jwk_json = serde_json::to_string(&jwk_thumb)?;
@@ -273,14 +281,14 @@ fn key_authorization(token: &str, key: &AcmeKey, extra_sha256: bool) -> Result<S
     Ok(res)
 }
 
-fn wait_for_auth_status(
+async fn wait_for_auth_status(
     inner: &Arc<AccountInner>,
     auth_url: &str,
     delay: Duration,
-) -> Result<ApiAuth> {
+) -> Result<ApiAuth, error::Error> {
     let auth = loop {
-        let res = inner.transport.call(auth_url, &ApiEmptyString)?;
-        let auth: ApiAuth = read_json(res)?;
+        let res = inner.transport.call(auth_url, &ApiEmptyString).await?;
+        let auth: ApiAuth = read_json(res).await?;
         if !auth.is_status_pending() {
             break auth;
         }
@@ -293,23 +301,25 @@ fn wait_for_auth_status(
 mod test {
     use crate::*;
 
-    #[test]
-    fn test_get_challenges() -> Result<()> {
+    #[tokio::test]
+    async fn test_get_challenges() -> Result<(), error::Error> {
         let server = crate::test::with_directory_server();
         let url = DirectoryUrl::Other(&server.dir_url);
-        let dir = Directory::from_url(url)?;
-        let acc = dir.register_account(vec!["mailto:foo@bar.com".to_string()])?;
-        let ord = acc.new_order("acmetest.example.com", &[])?;
-        let authz = ord.authorizations()?;
+        let dir = Directory::from_url(url).await?;
+        let acc = dir
+            .register_account(vec!["mailto:foo@bar.com".to_string()])
+            .await?;
+        let ord = acc.new_order("acmetest.example.com", &[]).await?;
+        let authz = ord.authorizations().await?;
         assert!(authz.len() == 1);
         let auth = &authz[0];
         {
-            let http = auth.http_challenge().unwrap();
-            assert!(http.need_validate());
+            let http = auth.http_challenge().await.unwrap();
+            assert!(http.need_validate().await);
         }
         {
-            let dns = auth.dns_challenge().unwrap();
-            assert!(dns.need_validate());
+            let dns = auth.dns_challenge().await.unwrap();
+            assert!(dns.need_validate().await);
         }
         Ok(())
     }

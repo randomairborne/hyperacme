@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::acc::AcmeKey;
-use crate::error::*;
+use crate::error;
 use crate::jwt::*;
 use crate::req::{req_expect_header, req_handle_error, req_head, req_post};
 use crate::util::base64url;
@@ -28,7 +28,7 @@ pub(crate) struct Transport {
 }
 
 impl Transport {
-    pub fn new(nonce_pool: &Arc<NoncePool>, acme_key: AcmeKey) -> Self {
+    pub async fn new(nonce_pool: &Arc<NoncePool>, acme_key: AcmeKey) -> Self {
         Transport {
             acme_key,
             nonce_pool: nonce_pool.clone(),
@@ -36,31 +36,42 @@ impl Transport {
     }
 
     /// Update the key id once it is known (part of setting up the transport).
-    pub fn set_key_id(&mut self, kid: String) {
+    pub async fn set_key_id(&mut self, kid: String) {
         self.acme_key.set_key_id(kid);
     }
 
     /// The key used in the transport
-    pub fn acme_key(&self) -> &AcmeKey {
+    pub async fn acme_key(&self) -> &AcmeKey {
         &self.acme_key
     }
 
     /// Make call using the full jwk. Only for the first newAccount request.
-    pub fn call_jwk<T: Serialize + ?Sized>(&self, url: &str, body: &T) -> Result<ureq::Response> {
-        self.do_call(url, body, jws_with_jwk)
+    pub async fn call_jwk<T: Serialize + ?Sized>(
+        &self,
+        url: &str,
+        body: &T,
+    ) -> Result<reqwest::Response, error::Error> {
+        self.do_call(url, body, jws_with_jwk).await
     }
 
     /// Make call using the key id
-    pub fn call<T: Serialize + ?Sized>(&self, url: &str, body: &T) -> Result<ureq::Response> {
-        self.do_call(url, body, jws_with_kid)
+    pub async fn call<T: Serialize + ?Sized>(
+        &self,
+        url: &str,
+        body: &T,
+    ) -> Result<reqwest::Response, error::Error> {
+        self.do_call(url, body, jws_with_kid).await
     }
 
-    fn do_call<T: Serialize + ?Sized, F: Fn(&str, String, &AcmeKey, &T) -> Result<String>>(
+    async fn do_call<
+        T: Serialize + ?Sized,
+        F: Fn(&str, String, &AcmeKey, &T) -> Result<String, error::Error>,
+    >(
         &self,
         url: &str,
         body: &T,
         make_body: F,
-    ) -> Result<ureq::Response> {
+    ) -> Result<String, error::Error> {
         // The ACME API may at any point invalidate all nonces. If we detect such an
         // error, we loop until the server accepts the nonce.
         loop {
@@ -73,14 +84,14 @@ impl Transport {
             debug!("Call endpoint {}", url);
 
             // Post it to the URL
-            let response = req_post(url, &body);
+            let response = req_post(url, &body).await?;
 
             // Regardless of the request being a success or not, there might be
             // a nonce in the response.
             self.nonce_pool.extract_nonce(&response);
 
             // Turn errors into ApiProblem.
-            let result = req_handle_error(response);
+            let result = response.text().await;
 
             if let Err(problem) = &result {
                 if problem.is_bad_nonce() {
@@ -115,18 +126,19 @@ impl NoncePool {
         }
     }
 
-    fn extract_nonce(&self, res: &ureq::Response) {
-        if let Some(nonce) = res.header("replay-nonce") {
+    fn extract_nonce(&self, res: &reqwest::Response) -> Result<(), reqwest::header::ToStrError> {
+        if let Some(nonce) = res.headers().get("replay-nonce") {
             trace!("Extract nonce");
             let mut pool = self.pool.lock().unwrap();
-            pool.push_back(nonce.to_string());
+            pool.push_back(nonce.to_str()?.to_string());
             if pool.len() > 10 {
                 pool.pop_front();
             }
         }
+        Ok(())
     }
 
-    fn get_nonce(&self) -> Result<String> {
+    fn get_nonce(&self) -> Result<String, error::Error> {
         {
             let mut pool = self.pool.lock().unwrap();
             if let Some(nonce) = pool.pop_front() {
@@ -145,7 +157,7 @@ fn jws_with_kid<T: Serialize + ?Sized>(
     nonce: String,
     key: &AcmeKey,
     payload: &T,
-) -> Result<String> {
+) -> Result<String, error::Error> {
     let protected = JwsProtected::new_kid(key.key_id(), url, nonce);
     jws_with(protected, key, payload)
 }
@@ -155,7 +167,7 @@ fn jws_with_jwk<T: Serialize + ?Sized>(
     nonce: String,
     key: &AcmeKey,
     payload: &T,
-) -> Result<String> {
+) -> Result<String, error::Error> {
     let jwk: Jwk = key.try_into()?;
     let protected = JwsProtected::new_jwk(jwk, url, nonce);
     jws_with(protected, key, payload)
@@ -165,7 +177,7 @@ fn jws_with<T: Serialize + ?Sized>(
     protected: JwsProtected,
     key: &AcmeKey,
     payload: &T,
-) -> Result<String> {
+) -> Result<String, error::Error> {
     let protected = {
         let pro_json = serde_json::to_string(&protected)?;
         base64url(pro_json.as_bytes())

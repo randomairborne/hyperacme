@@ -169,10 +169,13 @@ mod util;
 pub mod api;
 pub mod order;
 
+#[macro_use]
+extern crate tracing;
+
 #[cfg(test)]
 mod test;
 
 pub use crate::acc::{Account, RevocationReason};
 pub use crate::cert::{create_p256_key, create_p384_key, create_rsa_key, Certificate};
 pub use crate::dir::{Directory, DirectoryUrl};
-pub use crate::error::{Error, Result};
+pub use crate::error::Error;

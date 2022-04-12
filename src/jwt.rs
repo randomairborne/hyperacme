@@ -1,4 +1,5 @@
-use crate::{acc::AcmeKey, cert::EC_GROUP_P256, util::base64url, Result};
+use crate::error;
+use crate::{acc::AcmeKey, cert::EC_GROUP_P256, util::base64url};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
@@ -56,7 +57,7 @@ pub(crate) struct JwkThumb {
 
 impl TryFrom<&AcmeKey> for Jwk {
     type Error = crate::Error;
-    fn try_from(a: &AcmeKey) -> Result<Self> {
+    fn try_from(a: &AcmeKey) -> Result<Self, error::Error> {
         let mut ctx = openssl::bn::BigNumContext::new()?;
         let mut x = openssl::bn::BigNum::new()?;
         let mut y = openssl::bn::BigNum::new()?;

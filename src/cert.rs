@@ -1,4 +1,3 @@
-use crate::error::Result;
 use lazy_static::lazy_static;
 use openssl::{
     ec::{Asn1Flag, EcGroup, EcKey},
@@ -10,7 +9,7 @@ use openssl::{
     x509::{extension::SubjectAlternativeName, X509Req, X509ReqBuilder, X509},
 };
 
-use crate::error::*;
+use crate::error;
 
 lazy_static! {
     pub(crate) static ref EC_GROUP_P256: EcGroup = ec_group(Nid::X9_62_PRIME256V1);
@@ -28,27 +27,30 @@ fn ec_group(nid: Nid) -> EcGroup {
 ///
 /// This library does not check the number of bits used to create the key pair.
 /// For Let's Encrypt, the bits must be between 2048 and 4096.
-pub fn create_rsa_key(bits: u32) -> Result<PKey<pkey::Private>> {
+pub fn create_rsa_key(bits: u32) -> Result<PKey<pkey::Private>, error::Error> {
     let pri_key_rsa = Rsa::generate(bits)?;
     let pkey = PKey::from_rsa(pri_key_rsa)?;
     Ok(pkey)
 }
 
 /// Make a P-256 private key (from which we can derive a public key).
-pub fn create_p256_key() -> Result<PKey<pkey::Private>> {
+pub fn create_p256_key() -> Result<PKey<pkey::Private>, error::Error> {
     let pri_key_ec = EcKey::generate(&*EC_GROUP_P256)?;
     let pkey = PKey::from_ec_key(pri_key_ec)?;
     Ok(pkey)
 }
 
 /// Make a P-384 private key pair (from which we can derive a public key).
-pub fn create_p384_key() -> Result<PKey<pkey::Private>> {
+pub fn create_p384_key() -> Result<PKey<pkey::Private>, error::Error> {
     let pri_key_ec = EcKey::generate(&*EC_GROUP_P384)?;
     let pkey = PKey::from_ec_key(pri_key_ec)?;
     Ok(pkey)
 }
 
-pub(crate) fn create_csr(pkey: &PKey<pkey::Private>, domains: &[&str]) -> Result<X509Req> {
+pub(crate) fn create_csr(
+    pkey: &PKey<pkey::Private>,
+    domains: &[&str],
+) -> Result<X509Req, error::Error> {
     //
     // the csr builder
     let mut req_bld = X509ReqBuilder::new()?;
@@ -93,7 +95,7 @@ impl Certificate {
         }
     }
 
-    pub fn parse(private_key: String, certificate: String) -> Result<Self> {
+    pub fn parse(private_key: String, certificate: String) -> Result<Self, error::Error> {
         // validate certificate
         X509::from_pem(certificate.as_bytes())?;
         // validate private key
@@ -111,7 +113,7 @@ impl Certificate {
     }
 
     /// The private key as DER.
-    pub fn private_key_der(&self) -> Result<Vec<u8>> {
+    pub fn private_key_der(&self) -> Result<Vec<u8>, error::Error> {
         let pkey = PKey::private_key_from_pem(self.private_key.as_bytes())?;
         let der = pkey.private_key_to_der()?;
         Ok(der)
@@ -123,7 +125,7 @@ impl Certificate {
     }
 
     /// The issued certificate as DER.
-    pub fn certificate_der(&self) -> Result<Vec<u8>> {
+    pub fn certificate_der(&self) -> Result<Vec<u8>, error::Error> {
         let x509 = X509::from_pem(self.certificate.as_bytes())?;
         let der = x509.to_der()?;
         Ok(der)
@@ -136,7 +138,7 @@ impl Certificate {
     /// issued cert, since it counts _whole_ days.
     ///
     /// It is possible to get negative days for an expired certificate.
-    pub fn valid_days_left(&self) -> Result<i64> {
+    pub fn valid_days_left(&self) -> Result<i64, error::Error> {
         // the cert used in the tests is not valid to load as x509
         if cfg!(test) {
             return Ok(89);
@@ -150,13 +152,13 @@ impl Certificate {
         // Display trait produces this format, which is kinda dumb.
         // Apr 19 08:48:46 2019 GMT
         let expires = parse_date(&not_after)?;
-        let dur = expires - time::now();
+        let dur = expires - time::Instant::now();
 
         Ok(dur.num_days())
     }
 }
 
-fn parse_date(s: &str) -> Result<time::Tm> {
+fn parse_date(s: &str) -> Result<time::, error::Error> {
     debug!("Parse date/time: {}", s);
     let tm = time::strptime(s, "%h %e %H:%M:%S %Y %Z")?;
     Ok(tm)
@@ -169,6 +171,6 @@ mod test {
     #[test]
     fn test_parse_date() {
         let x = parse_date("May  3 07:40:15 2019 GMT").unwrap();
-        assert_eq!(time::strftime("%F %T", &x).unwrap(), "2019-05-03 07:40:15");
+        assert_eq!(time::strtime("%F %T", &x).unwrap(), "2019-05-03 07:40:15");
     }
 }

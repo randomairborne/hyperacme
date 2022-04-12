@@ -1,45 +1,63 @@
+use reqwest::header::{HeaderName, HeaderValue};
+
 use crate::api::ApiProblem;
-use crate::error::*;
+use crate::error;
 
 pub(crate) type ReqResult<T> = std::result::Result<T, ApiProblem>;
 
-pub(crate) fn req_get(url: &str) -> ureq::Response {
-    let mut req = ureq::get(url);
-    req_configure(&mut req);
-    trace!("{:?}", req);
-    req.call()
+pub(crate) async fn req_get(url: &str) -> Result<reqwest::Response, error::Error> {
+    let client = newclient().await;
+    let req = client
+        .get(url)
+        .header(
+            HeaderName::from_static("content-type"),
+            HeaderValue::from_static("application/jose+json"),
+        )
+        .build()?;
+    Ok(client.execute(req).await?)
 }
 
-pub(crate) fn req_head(url: &str) -> ureq::Response {
-    let mut req = ureq::head(url);
-    req_configure(&mut req);
-    trace!("{:?}", req);
-    req.call()
+pub(crate) async fn req_head(url: &str) -> Result<reqwest::Response, error::Error> {
+    let client = newclient().await;
+    let req = client
+        .head(url)
+        .header(
+            HeaderName::from_static("content-type"),
+            HeaderValue::from_static("application/jose+json"),
+        )
+        .build()?;
+    Ok(client.execute(req).await?)
 }
 
-pub(crate) fn req_post(url: &str, body: &str) -> ureq::Response {
-    let mut req = ureq::post(url);
-    req.set("content-type", "application/jose+json");
-    req_configure(&mut req);
-    trace!("{:?} {}", req, body);
-    req.send_string(body)
+pub(crate) async fn req_post(url: &str, body: String) -> Result<reqwest::Response, error::Error> {
+    let client = newclient().await;
+    let req = client
+        .post(url)
+        .header(
+            HeaderName::from_static("content-type"),
+            HeaderValue::from_static("application/jose+json"),
+        )
+        .body(body)
+        .build()?;
+    Ok(client.execute(req).await?)
 }
 
-fn req_configure(req: &mut ureq::Request) {
-    req.timeout_connect(30_000);
-    req.timeout_read(30_000);
-    req.timeout_write(30_000);
-}
-
-pub(crate) fn req_handle_error(res: ureq::Response) -> ReqResult<ureq::Response> {
+pub(crate) async fn req_handle_error(
+    res: reqwest::Response,
+) -> Result<reqwest::Response, error::Error> {
     // ok responses pass through
-    if res.ok() {
+    if res.status() == 200 {
         return Ok(res);
     }
 
-    let problem = if res.content_type() == "application/problem+json" {
+    let problem = if res
+        .headers()
+        .get("Content-Type")
+        .ok_or(error::Error::NoContentType)?
+        == "application/problem+json"
+    {
         // if we were sent a problem+json, deserialize it
-        let body = req_safe_read_body(res);
+        let body = res.text().await?;
         serde_json::from_str(&body).unwrap_or_else(|e| ApiProblem {
             _type: "problemJsonFail".into(),
             detail: Some(format!(
@@ -51,8 +69,8 @@ pub(crate) fn req_handle_error(res: ureq::Response) -> ReqResult<ureq::Response>
         })
     } else {
         // some other problem
-        let status = format!("{} {}", res.status(), res.status_text());
-        let body = req_safe_read_body(res);
+        let status = format!("{} {}", res.status(), res.text().await?);
+        let body = res.text().await?;
         let detail = format!("{} body: {}", status, body);
         ApiProblem {
             _type: "httpReqError".into(),
@@ -64,22 +82,18 @@ pub(crate) fn req_handle_error(res: ureq::Response) -> ReqResult<ureq::Response>
     Err(problem)
 }
 
-pub(crate) fn req_expect_header(res: &ureq::Response, name: &str) -> ReqResult<String> {
-    res.header(name)
-        .map(|v| v.to_string())
-        .ok_or_else(|| ApiProblem {
-            _type: format!("Missing header: {}", name),
-            detail: None,
-            subproblems: None,
-        })
+pub(crate) fn req_expect_header(
+    res: &reqwest::Response,
+    name: &str,
+) -> Result<String, error::Error> {
+    let header_str = res
+        .headers()
+        .get(name)
+        .ok_or_else(|| error::Error::GeneralError("Header extraction error!".to_string()))?
+        .to_str()?;
+    Ok(header_str.to_string())
 }
 
-pub(crate) fn req_safe_read_body(res: ureq::Response) -> String {
-    use std::io::Read;
-    let mut res_body = String::new();
-    let mut read = res.into_reader();
-    // letsencrypt sometimes closes the TLS abruptly causing io error
-    // even though we did capture the body.
-    read.read_to_string(&mut res_body).ok();
-    res_body
+pub(crate) async fn newclient() -> reqwest::Client {
+    reqwest::Client::new()
 }
