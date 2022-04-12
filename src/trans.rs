@@ -10,7 +10,7 @@ use std::{
 use crate::acc::AcmeKey;
 use crate::error;
 use crate::jwt::*;
-use crate::req::{req_expect_header, req_handle_error, req_head, req_post};
+use crate::req::{req_expect_header, req_head, req_post};
 use crate::util::base64url;
 
 /// JWS payload and nonce handling for requests to the API.
@@ -71,12 +71,12 @@ impl Transport {
         url: &str,
         body: &T,
         make_body: F,
-    ) -> Result<String, error::Error> {
+    ) -> Result<reqwest::Response, error::Error> {
         // The ACME API may at any point invalidate all nonces. If we detect such an
         // error, we loop until the server accepts the nonce.
         loop {
             // Either get a new nonce, or reuse one from a previous request.
-            let nonce = self.nonce_pool.get_nonce()?;
+            let nonce = self.nonce_pool.get_nonce().await?;
 
             // Sign the body.
             let body = make_body(url, nonce, &self.acme_key, body)?;
@@ -84,29 +84,26 @@ impl Transport {
             debug!("Call endpoint {}", url);
 
             // Post it to the URL
-            let response = req_post(url, &body).await?;
+            let result = req_post(url, body).await?;
 
             // Regardless of the request being a success or not, there might be
             // a nonce in the response.
-            self.nonce_pool.extract_nonce(&response);
+            self.nonce_pool.extract_nonce(&result);
 
-            // Turn errors into ApiProblem.
-            let result = response.text().await;
+            // if let Err(problem) = &result {
+            //     if problem.is_bad_nonce() {
+            //         // retry the request with a new nonce.
+            //         debug!("Retrying on bad nonce");
+            //         continue;
+            //     }
+            //     // it seems we sometimes make bad JWTs. Why?!
+            //     if problem.is_jwt_verification_error() {
+            //         debug!("Retrying on: {}", problem);
+            //         continue;
+            //     }
+            // }
 
-            if let Err(problem) = &result {
-                if problem.is_bad_nonce() {
-                    // retry the request with a new nonce.
-                    debug!("Retrying on bad nonce");
-                    continue;
-                }
-                // it seems we sometimes make bad JWTs. Why?!
-                if problem.is_jwt_verification_error() {
-                    debug!("Retrying on: {}", problem);
-                    continue;
-                }
-            }
-
-            return Ok(result?);
+            return Ok(result);
         }
     }
 }
@@ -119,14 +116,14 @@ pub(crate) struct NoncePool {
 }
 
 impl NoncePool {
-    pub fn new(nonce_url: &str) -> Self {
+    pub async fn new(nonce_url: &str) -> Self {
         NoncePool {
             nonce_url: nonce_url.into(),
             ..Default::default()
         }
     }
 
-    fn extract_nonce(&self, res: &reqwest::Response) -> Result<(), reqwest::header::ToStrError> {
+    async fn extract_nonce(&self, res: &reqwest::Response) -> Result<(), reqwest::header::ToStrError> {
         if let Some(nonce) = res.headers().get("replay-nonce") {
             trace!("Extract nonce");
             let mut pool = self.pool.lock().unwrap();
@@ -138,7 +135,7 @@ impl NoncePool {
         Ok(())
     }
 
-    fn get_nonce(&self) -> Result<String, error::Error> {
+    async fn get_nonce(&self) -> Result<String, error::Error> {
         {
             let mut pool = self.pool.lock().unwrap();
             if let Some(nonce) = pool.pop_front() {
@@ -147,22 +144,22 @@ impl NoncePool {
             }
         }
         debug!("Request new nonce");
-        let res = req_head(&self.nonce_url);
+        let res = req_head(&self.nonce_url).await?;
         Ok(req_expect_header(&res, "replay-nonce")?)
     }
 }
 
-fn jws_with_kid<T: Serialize + ?Sized>(
+async fn jws_with_kid<T: Serialize + ?Sized>(
     url: &str,
     nonce: String,
     key: &AcmeKey,
     payload: &T,
 ) -> Result<String, error::Error> {
     let protected = JwsProtected::new_kid(key.key_id(), url, nonce);
-    jws_with(protected, key, payload)
+    jws_with(protected, key, payload).await
 }
 
-fn jws_with_jwk<T: Serialize + ?Sized>(
+async fn jws_with_jwk<T: Serialize + ?Sized>(
     url: &str,
     nonce: String,
     key: &AcmeKey,
@@ -170,10 +167,10 @@ fn jws_with_jwk<T: Serialize + ?Sized>(
 ) -> Result<String, error::Error> {
     let jwk: Jwk = key.try_into()?;
     let protected = JwsProtected::new_jwk(jwk, url, nonce);
-    jws_with(protected, key, payload)
+    jws_with(protected, key, payload).await
 }
 
-fn jws_with<T: Serialize + ?Sized>(
+async fn jws_with<T: Serialize + ?Sized>(
     protected: JwsProtected,
     key: &AcmeKey,
     payload: &T,

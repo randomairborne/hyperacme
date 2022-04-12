@@ -1,3 +1,5 @@
+
+
 #[derive(Debug)]
 pub enum Error {
     ReqwestError(reqwest::Error),
@@ -7,6 +9,8 @@ pub enum Error {
     StringFromUtf8Error(std::string::FromUtf8Error),
     GeneralError(String),
     HeaderToStrError(reqwest::header::ToStrError),
+    ApiProblem(crate::api::ApiProblem),
+    ChronoParseError(chrono::ParseError),
 
     NoChallenge,
     NoContentType,
@@ -45,5 +49,17 @@ impl From<std::string::FromUtf8Error> for Error {
 impl From<reqwest::header::ToStrError> for Error {
     fn from(e: reqwest::header::ToStrError) -> Error {
         Self::HeaderToStrError(e)
+    }
+}
+
+impl From<crate::api::ApiProblem> for Error {
+    fn from(e: crate::api::ApiProblem) -> Error {
+        Self::ApiProblem(e)
+    }
+}
+
+impl From<chrono::ParseError> for Error {
+    fn from(e: chrono::ParseError) -> Error {
+        Self::ChronoParseError(e)
     }
 }

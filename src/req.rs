@@ -69,7 +69,7 @@ pub(crate) async fn req_handle_error(
         })
     } else {
         // some other problem
-        let status = format!("{} {}", res.status(), res.text().await?);
+        let status = res.status().as_u16();
         let body = res.text().await?;
         let detail = format!("{} body: {}", status, body);
         ApiProblem {
@@ -79,7 +79,7 @@ pub(crate) async fn req_handle_error(
         }
     };
 
-    Err(problem)
+    Err(error::Error::ApiProblem(problem))
 }
 
 pub(crate) fn req_expect_header(

@@ -1,16 +1,16 @@
-# acme-micro
+# hyperacme
 
-acme-micro is a fork of [acme-lib](https://github.com/algesten/acme-lib) and
+hyperacme is a fork of [acme-micro](https://github.com/kpcyrd/acme-micro), which is a fork [acme-lib](https://github.com/algesten/acme-lib) and
 allows accessing ACME (Automatic Certificate Management Environment) services
-such as [Let's Encrypt](https://letsencrypt.org/).
+such as [Let's Encrypt](https://letsencrypt.org/) in an asynchronous fashion..
 
 Uses ACME v2 to issue/renew certificates.
 
 ## Example
 
 ```rust
-use acme_micro::{Error, Certificate, Directory, DirectoryUrl};
-use acme_micro::create_p384_key;
+use hyperacme::{Error, Certificate, Directory, DirectoryUrl};
+use hyperacme::create_p384_key;
 use std::time::Duration;
 
 fn request_cert() -> Result<Certificate, Error> {

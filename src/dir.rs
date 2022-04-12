@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::{
     acc::AcmeKey,
     api::{ApiAccount, ApiDirectory},
-    error::{self, *},
+    error,
     req::{req_expect_header, req_get, req_handle_error},
     trans::{NoncePool, Transport},
     util::read_json,
@@ -50,7 +50,7 @@ impl Directory {
         let dir_url = url.to_url();
         let res = req_handle_error(req_get(&dir_url).await?).await?;
         let api_directory: ApiDirectory = res.json().await?;
-        let nonce_pool = Arc::new(NoncePool::new(&api_directory.newNonce));
+        let nonce_pool = Arc::new(NoncePool::new(&api_directory.newNonce).await);
         Ok(Directory {
             nonce_pool,
             api_directory,

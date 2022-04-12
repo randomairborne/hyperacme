@@ -152,25 +152,17 @@ impl Certificate {
         // Display trait produces this format, which is kinda dumb.
         // Apr 19 08:48:46 2019 GMT
         let expires = parse_date(&not_after)?;
-        let dur = expires - time::Instant::now();
+        let dur = expires / 86_400 - chrono::offset::Utc::now().timestamp();
 
-        Ok(dur.num_days())
+        Ok(dur)
     }
 }
 
-fn parse_date(s: &str) -> Result<time::, error::Error> {
+fn parse_date(s: &str) -> Result<i64, error::Error> {
     debug!("Parse date/time: {}", s);
-    let tm = time::strptime(s, "%h %e %H:%M:%S %Y %Z")?;
-    Ok(tm)
+    let time_items = chrono::format::StrftimeItems::new("%h %e %H:%M:%S %Y %Z");
+    let mut tm = chrono::format::Parsed::new();
+    chrono::format::parse(&mut tm, s, time_items)?;
+    Ok(tm.timestamp.ok_or_else(|| error::Error::GeneralError("Error getting timestamp!".to_string()))?)
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_parse_date() {
-        let x = parse_date("May  3 07:40:15 2019 GMT").unwrap();
-        assert_eq!(time::strtime("%F %T", &x).unwrap(), "2019-05-03 07:40:15");
-    }
-}
