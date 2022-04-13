@@ -4,9 +4,9 @@ use serde::Serialize;
 use std::collections::VecDeque;
 use std::{
     convert::TryInto,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
-
+use tokio::sync::Mutex;
 use crate::acc::AcmeKey;
 use crate::error;
 use crate::jwt::*;
@@ -130,7 +130,7 @@ impl NoncePool {
     ) -> Result<(), reqwest::header::ToStrError> {
         if let Some(nonce) = res.headers.get("replay-nonce") {
             trace!("Extract nonce");
-            let mut pool = self.pool.lock().unwrap();
+            let mut pool = self.pool.lock().await;
             pool.push_back(nonce.to_str()?.to_string());
             if pool.len() > 10 {
                 pool.pop_front();
@@ -141,7 +141,7 @@ impl NoncePool {
 
     async fn get_nonce(&self) -> Result<String, error::Error> {
         {
-            let mut pool = self.pool.lock().unwrap();
+            let mut pool = self.pool.lock().await;
             if let Some(nonce) = pool.pop_front() {
                 trace!("Use previous nonce");
                 return Ok(nonce);
