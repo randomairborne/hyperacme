@@ -65,22 +65,22 @@ impl Auth {
     /// The challenge will be accessed over HTTP (not HTTPS), for obvious reasons.
     ///
     /// ```no_run
-    /// use acme_micro::order::Auth;
-    /// use acme_micro::Error;
+    /// use hyperacme::order::Auth;
+    /// use hyperacme::Error;
     /// use std::fs::File;
     /// use std::io::Write;
     /// use std::time::Duration;
     ///
-    /// fn web_authorize(auth: &Auth) -> Result<(), Error> {
-    ///   let challenge = auth.http_challenge().unwrap();
+    /// async fn web_authorize(auth: &Auth) -> Result<(), Error> {
+    ///   let challenge = auth.http_challenge().await.unwrap();
     ///   // Assuming our web server's root is under /var/www
     ///   let path = {
-    ///     let token = challenge.http_token();
+    ///     let token = challenge.http_token().await;
     ///     format!("/var/www/.well-known/acme-challenge/{}", token)
     ///   };
     ///   let mut file = File::create(&path)?;
-    ///   file.write_all(challenge.http_proof()?.as_bytes())?;
-    ///   challenge.validate(Duration::from_millis(5000))?;
+    ///   file.write_all(challenge.http_proof().await?.as_bytes())?;
+    ///   challenge.validate(Duration::from_millis(5000)).await?;
     ///   Ok(())
     /// }
     /// ```
@@ -100,15 +100,16 @@ impl Auth {
     /// The <proof> contains the signed token proving this account update it.
     ///
     /// ```no_run
-    /// use acme_micro::order::Auth;
-    /// use acme_micro::Error;
+    /// use hyperacme::order::Auth;
+    /// use hyperacme::Error;
     /// use std::time::Duration;
     ///
-    /// fn dns_authorize(auth: &Auth) -> Result<(), Error> {
-    ///   let challenge = auth.dns_challenge().unwrap();
-    ///   let record = format!("_acme-challenge.{}.", auth.domain_name());
+    /// #[tokio::main]
+    /// async fn dns_authorize(auth: &Auth) -> Result<(), Error> {
+    ///   let challenge = auth.dns_challenge().await.unwrap();
+    ///   let record = format!("_acme-challenge.{}.", auth.domain_name().await);
     ///   // route_53_set_record(&record, "TXT", challenge.dns_proof());
-    ///   challenge.validate(Duration::from_millis(5000))?;
+    ///   challenge.validate(Duration::from_millis(5000)).await?;
     ///   Ok(())
     /// }
     /// ```

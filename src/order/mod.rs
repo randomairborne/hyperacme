@@ -69,7 +69,7 @@ pub(crate) async fn refresh_order(
 
 #[cfg(not(test))]
 async fn api_order_of(
-    res: reqwest::Response,
+    res: crate::req::ReqResult,
     _want_status: &str,
 ) -> Result<ApiOrder, error::Error> {
     read_json(res).await
@@ -77,11 +77,13 @@ async fn api_order_of(
 
 #[cfg(test)]
 // our test rig requires the order to be in `want_status`
-async fn api_order_of(res: reqwest::Response, want_status: &str) -> Result<ApiOrder, error::Error> {
-    let s = res.text().await?;
+async fn api_order_of(
+    res: crate::req::ReqResult,
+    want_status: &str,
+) -> Result<ApiOrder, error::Error> {
     #[allow(clippy::trivial_regex)]
     let re = regex::Regex::new("<STATUS>").unwrap();
-    let b = re.replace_all(&s, want_status).to_string();
+    let b = re.replace_all(&res.body, want_status).to_string();
     let api_order: ApiOrder = serde_json::from_str(&b)?;
     Ok(api_order)
 }
@@ -310,7 +312,7 @@ impl CertOrder {
         let pkey_pem_bytes = self.private_key.private_key_to_pem_pkcs8()?;
         let pkey_pem = String::from_utf8_lossy(&pkey_pem_bytes);
 
-        let cert = res.text().await?;
+        let cert = res.body;
 
         Ok(Certificate::new(pkey_pem.to_string(), cert))
     }

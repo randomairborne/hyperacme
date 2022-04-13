@@ -5,7 +5,7 @@ use crate::{
     acc::AcmeKey,
     api::{ApiAccount, ApiDirectory},
     error,
-    req::{req_expect_header, req_get, req_handle_error},
+    req::{req_expect_header, req_get},
     trans::{NoncePool, Transport},
     util::read_json,
     Account,
@@ -48,8 +48,8 @@ impl Directory {
     /// Create a directory over a persistence implementation and directory url.
     pub async fn from_url(url: DirectoryUrl<'_>) -> Result<Directory, error::Error> {
         let dir_url = url.to_url();
-        let res = req_handle_error(req_get(&dir_url).await?).await?;
-        let api_directory: ApiDirectory = res.json().await?;
+        let res = req_get(&dir_url).await?;
+        let api_directory: ApiDirectory = serde_json::from_str(&res.body)?;
         let nonce_pool = Arc::new(NoncePool::new(&api_directory.newNonce).await);
         Ok(Directory {
             nonce_pool,
@@ -94,7 +94,7 @@ impl Directory {
         let api_account: ApiAccount = read_json(res).await?;
 
         // fill in the server returned key id
-        transport.set_key_id(kid);
+        transport.set_key_id(kid).await;
 
         // The finished account
         Ok(Account::new(

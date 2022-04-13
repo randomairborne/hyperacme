@@ -50,7 +50,7 @@ impl Transport {
         &self,
         url: &str,
         body: &T,
-    ) -> Result<reqwest::Response, error::Error> {
+    ) -> Result<crate::req::ReqResult, error::Error> {
         self.do_call(url, body, jws_with_jwk).await
     }
 
@@ -59,7 +59,7 @@ impl Transport {
         &self,
         url: &str,
         body: &T,
-    ) -> Result<reqwest::Response, error::Error> {
+    ) -> Result<crate::req::ReqResult, error::Error> {
         self.do_call(url, body, jws_with_kid).await
     }
 
@@ -71,7 +71,7 @@ impl Transport {
         url: &str,
         body: &T,
         make_body: F,
-    ) -> Result<reqwest::Response, error::Error> {
+    ) -> Result<crate::req::ReqResult, error::Error> {
         // The ACME API may at any point invalidate all nonces. If we detect such an
         // error, we loop until the server accepts the nonce.
         loop {
@@ -88,20 +88,21 @@ impl Transport {
 
             // Regardless of the request being a success or not, there might be
             // a nonce in the response.
-            self.nonce_pool.extract_nonce(&result);
-
-            // if let Err(problem) = &result {
-            //     if problem.is_bad_nonce() {
-            //         // retry the request with a new nonce.
-            //         debug!("Retrying on bad nonce");
-            //         continue;
-            //     }
-            //     // it seems we sometimes make bad JWTs. Why?!
-            //     if problem.is_jwt_verification_error() {
-            //         debug!("Retrying on: {}", problem);
-            //         continue;
-            //     }
-            // }
+            self.nonce_pool.extract_nonce(&result).await?;
+            let r_json_res = serde_json::from_str::<crate::api::ApiProblem>(&result.body);
+            if r_json_res.is_ok() {
+                let r_json = r_json_res?;
+                if r_json.is_bad_nonce() {
+                    // retry the request with a new nonce.
+                    debug!("Retrying on bad nonce");
+                    continue;
+                }
+                // it seems we sometimes make bad JWTs. Why?!
+                if r_json.is_jwt_verification_error() {
+                    debug!("Retrying on: {:?}", r_json);
+                    continue;
+                }
+            }
 
             return Ok(result);
         }
@@ -123,8 +124,11 @@ impl NoncePool {
         }
     }
 
-    async fn extract_nonce(&self, res: &reqwest::Response) -> Result<(), reqwest::header::ToStrError> {
-        if let Some(nonce) = res.headers().get("replay-nonce") {
+    async fn extract_nonce(
+        &self,
+        res: &crate::req::ReqResult,
+    ) -> Result<(), reqwest::header::ToStrError> {
+        if let Some(nonce) = res.headers.get("replay-nonce") {
             trace!("Extract nonce");
             let mut pool = self.pool.lock().unwrap();
             pool.push_back(nonce.to_str()?.to_string());
@@ -149,17 +153,17 @@ impl NoncePool {
     }
 }
 
-async fn jws_with_kid<T: Serialize + ?Sized>(
+fn jws_with_kid<T: Serialize + ?Sized>(
     url: &str,
     nonce: String,
     key: &AcmeKey,
     payload: &T,
 ) -> Result<String, error::Error> {
     let protected = JwsProtected::new_kid(key.key_id(), url, nonce);
-    jws_with(protected, key, payload).await
+    jws_with(protected, key, payload)
 }
 
-async fn jws_with_jwk<T: Serialize + ?Sized>(
+fn jws_with_jwk<T: Serialize + ?Sized>(
     url: &str,
     nonce: String,
     key: &AcmeKey,
@@ -167,10 +171,10 @@ async fn jws_with_jwk<T: Serialize + ?Sized>(
 ) -> Result<String, error::Error> {
     let jwk: Jwk = key.try_into()?;
     let protected = JwsProtected::new_jwk(jwk, url, nonce);
-    jws_with(protected, key, payload).await
+    jws_with(protected, key, payload)
 }
 
-async fn jws_with<T: Serialize + ?Sized>(
+fn jws_with<T: Serialize + ?Sized>(
     protected: JwsProtected,
     key: &AcmeKey,
     payload: &T,

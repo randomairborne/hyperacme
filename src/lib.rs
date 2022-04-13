@@ -7,44 +7,44 @@
 //! # Example
 //!
 //! ```no_run
-//! use acme_micro::{Error, Certificate, Directory, DirectoryUrl};
-//! use acme_micro::create_p384_key;
+//! use hyperacme::{Error, Certificate, Directory, DirectoryUrl};
+//! use hyperacme::create_p384_key;
 //! use std::time::Duration;
 //!
-//! fn request_cert() -> Result<Certificate, Error> {
+//! async fn request_cert() -> Result<Certificate, Error> {
 //!
 //! // Use DirectoryUrl::LetsEncrypStaging for dev/testing.
 //! let url = DirectoryUrl::LetsEncrypt;
 //!
 //! // Create a directory entrypoint.
-//! let dir = Directory::from_url(url)?;
+//! let dir = Directory::from_url(url).await?;
 //!
 //! // Your contact addresses, note the `mailto:`
 //! let contact = vec!["mailto:foo@bar.com".to_string()];
 //!
 //! // Generate a private key and register an account with your ACME provider.
 //! // You should write it to disk any use `load_account` afterwards.
-//! let acc = dir.register_account(contact.clone())?;
+//! let acc = dir.register_account(contact.clone()).await?;
 //!
 //! // Example of how to load an account from string:
-//! let privkey = acc.acme_private_key_pem()?;
-//! let acc = dir.load_account(&privkey, contact)?;
+//! let privkey = acc.acme_private_key_pem().await?;
+//! let acc = dir.load_account(&privkey, contact).await?;
 //!
 //! // Order a new TLS certificate for a domain.
-//! let mut ord_new = acc.new_order("mydomain.io", &[])?;
+//! let mut ord_new = acc.new_order("example.com", &[]).await?;
 //!
 //! // If the ownership of the domain(s) have already been
 //! // authorized in a previous order, you might be able to
 //! // skip validation. The ACME API provider decides.
 //! let ord_csr = loop {
 //!     // are we done?
-//!     if let Some(ord_csr) = ord_new.confirm_validations() {
+//!     if let Some(ord_csr) = ord_new.confirm_validations().await {
 //!         break ord_csr;
 //!     }
 //!
 //!     // Get the possible authorizations (for a single domain
 //!     // this will only be one element).
-//!     let auths = ord_new.authorizations()?;
+//!     let auths = ord_new.authorizations().await?;
 //!
 //!     // For HTTP, the challenge is a text file that needs to
 //!     // be placed in your web server's root:
@@ -55,15 +55,15 @@
 //!     // web for the domain(s) you are trying to get a
 //!     // certificate for:
 //!     //
-//!     // http://mydomain.io/.well-known/acme-challenge/<token>
-//!     let chall = auths[0].http_challenge().unwrap();
+//!     // http://example.com/.well-known/acme-challenge/<token>
+//!     let chall = auths[0].http_challenge().await.unwrap();
 //!
 //!     // The token is the filename.
-//!     let token = chall.http_token();
+//!     let token = chall.http_token().await;
 //!     let path = format!(".well-known/acme-challenge/{}", token);
 //!
 //!     // The proof is the contents of the file
-//!     let proof = chall.http_proof()?;
+//!     let proof = chall.http_proof().await?;
 //!
 //!     // Here you must do "something" to place
 //!     // the file/contents in the correct place.
@@ -77,10 +77,10 @@
 //!     // confirm ownership of the domain, or fail due to the
 //!     // not finding the proof. To see the change, we poll
 //!     // the API with 5000 milliseconds wait between.
-//!     chall.validate(Duration::from_millis(5000))?;
+//!     chall.validate(Duration::from_millis(5000)).await?;
 //!
 //!     // Update the state against the ACME API.
-//!     ord_new.refresh()?;
+//!     ord_new.refresh().await?;
 //! };
 //!
 //! // Ownership is proven. Create a private key for
@@ -93,11 +93,11 @@
 //! // certificate is either issued or rejected. Again we poll
 //! // for the status change.
 //! let ord_cert =
-//!     ord_csr.finalize_pkey(pkey_pri, Duration::from_millis(5000))?;
+//!     ord_csr.finalize_pkey(pkey_pri, Duration::from_millis(5000)).await?;
 //!
 //! // Now download the certificate. Also stores the cert in
 //! // the persistence.
-//! let cert = ord_cert.download_cert()?;
+//! let cert = ord_cert.download_cert().await?;
 //! println!("{:?}", cert);
 //!
 //! Ok(cert)

@@ -4,7 +4,6 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
-
 use serde::{
     ser::{SerializeMap, Serializer},
     Deserialize, Serialize,

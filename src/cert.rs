@@ -163,6 +163,7 @@ fn parse_date(s: &str) -> Result<i64, error::Error> {
     let time_items = chrono::format::StrftimeItems::new("%h %e %H:%M:%S %Y %Z");
     let mut tm = chrono::format::Parsed::new();
     chrono::format::parse(&mut tm, s, time_items)?;
-    Ok(tm.timestamp.ok_or_else(|| error::Error::GeneralError("Error getting timestamp!".to_string()))?)
+    Ok(tm
+        .timestamp
+        .ok_or_else(|| error::Error::GeneralError("Error getting timestamp!".to_string()))?)
 }
-
