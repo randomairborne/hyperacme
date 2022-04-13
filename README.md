@@ -1,8 +1,8 @@
 # hyperacme
 
-hyperacme is a fork of [acme-micro](https://github.com/kpcyrd/acme-micro), which is a fork [acme-lib](https://github.com/algesten/acme-lib) and
+hyperacme is a fork of [acme-micro](https://github.com/kpcyrd/acme-micro), which is a fork of [acme-lib](https://github.com/algesten/acme-lib) and
 allows accessing ACME (Automatic Certificate Management Environment) services
-such as [Let's Encrypt](https://letsencrypt.org/) in an asynchronous fashion..
+such as [Let's Encrypt](https://letsencrypt.org/) in an asynchronous fashion, using [Reqwest](https://crates.io/crates/reqwest) and [Tokio](https://tokio.rs/)
 
 Uses ACME v2 to issue/renew certificates.
 
@@ -147,13 +147,10 @@ See [`DirectoryUrl::LetsEncryptStaging`].
 
 ### Implementation details
 
-The library tries to pull in as few dependencies as possible. (For now) that means using
-synchronous I/O and blocking cals. This doesn't rule out a futures based version later.
-
 It is written by following the
 [ACME draft spec 18](https://tools.ietf.org/html/draft-ietf-acme-acme-18), and relies
 heavily on the [openssl](https://docs.rs/openssl/) crate to make JWK/JWT and sign requests
-to the API.
+to the API.  A RusTLS/BoringSSL version might appear in the future.
 
 
 License: MIT
