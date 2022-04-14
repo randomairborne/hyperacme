@@ -1,3 +1,4 @@
+
 use lazy_static::lazy_static;
 use openssl::{
     ec::{Asn1Flag, EcGroup, EcKey},
@@ -131,17 +132,17 @@ impl Certificate {
         Ok(der)
     }
 
-    /// Inspect the certificate to count the number of (whole) valid days left.
+    /// Inspect the certificate to get the expiry date
     ///
     /// It's up to the ACME API provider to decide how long an issued certificate is valid.
     /// Let's Encrypt sets the validity to 90 days. This function reports 89 days for newly
     /// issued cert, since it counts _whole_ days.
     ///
     /// It is possible to get negative days for an expired certificate.
-    pub fn valid_days_left(&self) -> Result<i64, error::Error> {
+    pub fn expiry(&self) -> Result<chrono::DateTime<chrono::Utc>, error::Error> {
         // the cert used in the tests is not valid to load as x509
         if cfg!(test) {
-            return Ok(89);
+            return Ok(parse_date("May 15 11:11:11 2015 GMT")?);
         }
 
         // load as x509
@@ -152,18 +153,13 @@ impl Certificate {
         // Display trait produces this format, which is kinda dumb.
         // Apr 19 08:48:46 2019 GMT
         let expires = parse_date(&not_after)?;
-        let dur = expires / 86_400 - chrono::offset::Utc::now().timestamp();
 
-        Ok(dur)
+        Ok(expires)
     }
 }
 
-fn parse_date(s: &str) -> Result<i64, error::Error> {
+fn parse_date(s: &str) -> Result<chrono::DateTime<chrono::Utc>, error::Error> {
     debug!("Parse date/time: {}", s);
-    let time_items = chrono::format::StrftimeItems::new("%h %e %H:%M:%S %Y %Z");
-    let mut tm = chrono::format::Parsed::new();
-    chrono::format::parse(&mut tm, s, time_items)?;
-    Ok(tm
-        .timestamp
-        .ok_or_else(|| error::Error::GeneralError("Error getting timestamp!".to_string()))?)
+    let ndt = chrono::NaiveDateTime::parse_from_str(s, "%h %e %H:%M:%S %Y GMT")?;
+    Ok(chrono::DateTime::<chrono::Utc>::from_utc(ndt, chrono::Utc))
 }

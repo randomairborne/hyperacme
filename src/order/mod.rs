@@ -375,8 +375,13 @@ mod test {
         let cert = ord.download_cert().await?;
         assert_eq!("CERT HERE", cert.certificate());
         assert!(!cert.private_key().is_empty());
-        assert_eq!(cert.valid_days_left()?, 89);
-
+        let test_expiry = chrono::DateTime::<chrono::Utc>::from_utc(chrono::NaiveDateTime::parse_from_str("May 15 11:11:11 2015 GMT", "%h %e %H:%M:%S %Y GMT")?, chrono::Utc);
+        assert_eq!(
+            cert.expiry()?,
+            test_expiry
+        );
+        
+    
         Ok(())
     }
 }
