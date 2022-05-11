@@ -4,7 +4,7 @@ description = "Async library for requesting certificates from an ACME provider (
 license = "MIT"
 repository = "https://github.com/randomairborne/hyperacme"
 readme = "README.md"
-version = "0.0.3"
+version = "0.1.1"
 authors = [
     "Martin Algesten <martin@algesten.se>",
     "kpcyrd <git@rxv.cc>",
@@ -14,16 +14,27 @@ keywords = ["letsencrypt", "acme", "async"]
 categories = ["web-programming", "api-bindings"]
 edition = "2021"
 
+[features]
+default = []
+tokio = ["dep:tokio", "dep:reqwest"]
+async-std = ["dep:async-std", "dep:surf"]
+rustls = ["dep:ring", "surf?/h1-client-rustls", "reqwest?/rustls"]
+native-tls = ["dep:openssl", "surf?/h1-client", "reqwest?/native-tls"]
+
 [dependencies]
+async-std = { version = "1.11", features = ["attributes"], optional = true }
 base64 = "0.13"
 lazy_static = "1.4"
 tracing = "0.1"
-tokio = { version = "1", features = ["test-util", "macros", "time", "rt-multi-thread"]}
-openssl = "0.10"
+tokio = { version = "1", features = ["test-util", "macros", "time", "rt-multi-thread"], optional = true}
+openssl = { version = "0.10", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+surf = { version = "2.3", default-features = false, optional = true }
 chrono = "0.4"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json"], default-features = false,  optional = true }
+ring = { version = "0.16", optional = true }
+
 
 [dev-dependencies]
 doc-comment = "0.3"
