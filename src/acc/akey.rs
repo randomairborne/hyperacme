@@ -1,5 +1,6 @@
 use openssl::ec::EcKey;
 use openssl::pkey;
+use ring::p;
 
 use crate::cert::EC_GROUP_P256;
 use crate::error;
