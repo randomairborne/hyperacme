@@ -42,5 +42,5 @@ ring = { version = "0.16", optional = true }
 doc-comment = "0.3"
 env_logger = { version = "0.8", default-features = false }
 futures = "0.1.25"
-hyper = "0.12"
+hyper = "0.14"
 regex = "1.4"
