@@ -1,11 +1,11 @@
-mod cert_provider;
 mod client;
-mod dns_provider;
 mod error;
 mod model;
+mod providers;
 
-pub use cert_provider::CertProvider;
 pub use client::Client;
-pub use dns_provider::DnsProvider;
-pub use error::Error;
+pub use error::{AcmeError, AcmeErrorKind, AcmeIdentifier, AcmeSubproblem, Error};
 pub use model::{Directory, DirectoryMetadata};
+pub use providers::{
+    AcmeProvider, DnsProvider, DynamicLetsEncrypt, LetsEncrypt, LetsEncryptStaging,
+};
