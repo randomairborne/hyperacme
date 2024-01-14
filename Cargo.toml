@@ -1,46 +1,26 @@
 [package]
 name = "hyperacme"
-description = "Async library for requesting certificates from an ACME provider (acme-micro fork)."
+description = "Async library for requesting certificates from an ACME provider."
 license = "MIT"
 repository = "https://github.com/randomairborne/hyperacme"
 readme = "README.md"
-version = "0.1.4"
-authors = [
-    "Martin Algesten <martin@algesten.se>",
-    "kpcyrd <git@rxv.cc>",
-    "valkyrie_pilot <valk@randomairborne.dev>"
-]
+version = "0.2.0"
+authors = ["valkyrie_pilot <valk@randomairborne.dev>"]
 keywords = ["letsencrypt", "acme", "async"]
 categories = ["web-programming", "api-bindings"]
 edition = "2021"
-rust_version = "1.60"
+rust_version = "1.75"
 
 [features]
-default = ["tokio", "rustls"]
-tokio = ["dep:tokio", "dep:reqwest"]
-async-std = ["dep:async-std", "dep:surf"]
-rustls = ["dep:ring", "surf?/h1-client-rustls", "reqwest?/rustls"]
-native-tls = ["dep:openssl", "surf?/h1-client", "reqwest?/native-tls"]
+default = ["rustls"]
+rustls = ["reqwest/rustls"]
+native-tls = ["reqwest/native-tls"]
 
 [dependencies]
-async-std = { version = "1.11", features = ["attributes"], optional = true }
-base64 = "0.13"
-lazy_static = "1.4"
-tracing = "0.1"
-tokio = { version = "1", features = ["test-util", "macros", "time", "rt-multi-thread"], optional = true}
-openssl = { version = "0.10", optional = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sha2 = "0.10"
-surf = { version = "2.3", default-features = false, optional = true }
-chrono = "0.4"
-reqwest = { version = "0.11", features = ["json"], default-features = false,  optional = true }
-ring = { version = "0.16", optional = true }
+reqwest = { version = "0.11", features = [], default-features = false }
+serde = { version = "1", features = ["derive"] }
+thiserror = "1.0.56"
+
 
 
 [dev-dependencies]
-doc-comment = "0.3"
-env_logger = { version = "0.8", default-features = false }
-futures = "0.1.25"
-hyper = "0.14"
-regex = "1.4"
