@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use crate::{acme_provider::AcmeProvider, Error};
+use crate::Error;
 
 pub trait DnsProvider {
     fn create_dns(&self, key: String, value: String) -> impl Future<Output = Result<(), Error>>;
