@@ -29,4 +29,13 @@ impl Client {
     pub fn directory(&self) -> &Directory {
         &self.directory
     }
+
+    pub(crate) async fn request<T>(url: String) -> Result<T, Error> {
+        let payload = ();
+        jose_jws::General {
+            payload: None,
+            signatures: vec![],
+        };
+        unimplemented!()
+    }
 }
