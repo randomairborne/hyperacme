@@ -1,3 +1,4 @@
+use jose_jws::Signature;
 use reqwest::{Client as HttpClient, ClientBuilder as HttpClientBuilder};
 
 use crate::{AcmeProvider, Directory, Error};
@@ -5,6 +6,7 @@ use crate::{AcmeProvider, Directory, Error};
 pub struct Client {
     client: HttpClient,
     directory: Directory,
+    account_private_key: jose_b64::serde::Bytes
 }
 
 impl Client {
@@ -32,9 +34,13 @@ impl Client {
 
     pub(crate) async fn request<T>(url: String) -> Result<T, Error> {
         let payload = ();
-        jose_jws::General {
+        jose_jws::Flattened {
             payload: None,
-            signatures: vec![],
+            signature: Signature {
+                header: None,
+                protected: None,
+                signature: ,
+            },
         };
         unimplemented!()
     }
